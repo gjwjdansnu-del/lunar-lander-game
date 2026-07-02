@@ -1,6 +1,7 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 const G_MOON = 1.62;           // m/s² lunar gravity
 const PIXELS_PER_METER = 3.5;  // rendering scale (lower = more zoomed out)
+const LANDER_VISUAL_SCALE = 2.4; // draw lander larger without changing physics/camera
 const CAM_Y_LEAD = 40;         // camera looks this many meters below lander (shows ground)
 const DT = 1 / 120;            // fixed physics timestep (s)
 const MAX_SUBSTEPS = 4;
@@ -17,10 +18,10 @@ const DRY_MASS = 400;          // kg (empty)
 const MAX_FUEL = 100;          // %
 const FUEL_MASS = LANDER_MASS - DRY_MASS;
 
-// Thrust
-const MAIN_THRUST = 3200;      // N
+// Thrust (tuned for START_FUEL mass — matches original 100%-fuel handling feel)
+const MAIN_THRUST = 1500;      // N
 const MAIN_FUEL_RATE = 0.35;   // %/s at full thrust
-const ATT_THRUST = 180;        // N per side thruster (torque only, applied at corners)
+const ATT_THRUST = 85;         // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
@@ -426,7 +427,7 @@ class Lander {
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate(-this.theta); // canvas y is down, negate for correct visual
-    ctx.scale(PIXELS_PER_METER, PIXELS_PER_METER);
+    ctx.scale(PIXELS_PER_METER * LANDER_VISUAL_SCALE, PIXELS_PER_METER * LANDER_VISUAL_SCALE);
 
     // Legs
     ctx.strokeStyle = '#aaa';
