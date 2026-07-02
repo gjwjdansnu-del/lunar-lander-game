@@ -40,6 +40,7 @@ const CRASH_OMEGA = 0.35;        // rad/s
 const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
 const START_FUEL = 20;       // actual fuel tank (1/5 of original 100%)
+const START_VX = 36;           // m/s horizontal at start (2× original 18)
 const FUEL_DISPLAY_SCALE = 100 / START_FUEL; // show 100% at full tank
 const RCS_FLAME_SCALE = 5;
 
@@ -602,7 +603,7 @@ function initGame() {
   const startX = wrapX(WORLD_WIDTH_M * (0.25 + Math.random() * 0.5));
   const groundY = terrainHeightAt(terrain, startX);
   const startY = groundY - 120; // start 120m above ground
-  const startVx = 18; // m/s horizontal (fixed)
+  const startVx = START_VX;
   const startFuel = START_FUEL;
 
   lander = new Lander(startX, startY, startVx, 0, startFuel);
