@@ -4,7 +4,7 @@
 
 ## 플레이
 
-[게임 플레이하기](https://apl.github.io/lunar-lander-game/) *(배포 후 URL 업데이트)*
+[게임 플레이하기](https://gjwjdansnu-del.github.io/lunar-lander-game/)
 
 ### 조작
 
