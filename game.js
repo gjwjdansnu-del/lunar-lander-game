@@ -27,13 +27,14 @@ const ATT_THRUST = 180;        // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
-// Landing criteria (lenient)
-const MAX_LANDING_VY = 3.5;    // m/s downward
-const MAX_LANDING_VX = 2.5;    // m/s horizontal
-const MAX_LANDING_ANGLE = 18;  // degrees from upright
-const MAX_LANDING_SLOPE = 30;  // degrees terrain slope
-const CRASH_SPEED = 5.5;
-const CRASH_ANGLE = 55;
+// Landing criteria (strict — upright body, perpendicular to ground, slow & stable)
+const MAX_LANDING_VN = 2.2;      // m/s into ground along surface normal
+const MAX_LANDING_VT = 0.6;      // m/s along surface (must be near-vertical)
+const MAX_LANDING_ANGLE = 8;     // degrees body tilt from upright (ignores terrain slope)
+const MAX_LANDING_OMEGA = 0.10;  // rad/s max spin at touchdown
+const CRASH_SPEED = 4.0;
+const CRASH_ANGLE = 40;
+const CRASH_OMEGA = 0.35;        // rad/s
 
 // World
 const WORLD_WIDTH_M = 4000;
@@ -406,15 +407,16 @@ class Lander {
       if (!this.landed && !this.crashed) {
         const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
         const angleDeg = Math.abs(this.theta * 180 / Math.PI);
-        const slopeDeg = Math.abs(slope * 180 / Math.PI);
+        const vNormal = Math.abs(this.vx * nx + this.vy * ny);
+        const vTangent = Math.abs(this.vx * tx + this.vy * ty);
 
-        if (Math.abs(this.vy) <= MAX_LANDING_VY &&
-            Math.abs(this.vx) <= MAX_LANDING_VX &&
+        if (vTangent <= MAX_LANDING_VT &&
+            vNormal <= MAX_LANDING_VN &&
             angleDeg <= MAX_LANDING_ANGLE &&
-            slopeDeg <= MAX_LANDING_SLOPE) {
+            Math.abs(this.omega) <= MAX_LANDING_OMEGA) {
           this.landed = true;
           this.alive = false;
-        } else if (speed > CRASH_SPEED || angleDeg > CRASH_ANGLE) {
+        } else if (speed > CRASH_SPEED || angleDeg > CRASH_ANGLE || Math.abs(this.omega) > CRASH_OMEGA) {
           this.crashed = true;
           this.alive = false;
         }
@@ -837,7 +839,7 @@ function gameLoop(timestamp) {
       overlay.classList.remove('hidden');
     } else if (lander.crashed) {
       gameState = 'lost';
-      messageEl.innerHTML = '💥 충돌!<br><span style="font-size:16px;color:#aaa">속도나 자세가 너무 위험했습니다</span>';
+      messageEl.innerHTML = '💥 충돌!<br><span style="font-size:16px;color:#aaa">속도·자세·회전이 너무 위험했습니다</span>';
       overlay.classList.remove('hidden');
     } else if (lander.y > terrainHeightAt(terrain, lander.x) + 500) {
       gameState = 'lost';
