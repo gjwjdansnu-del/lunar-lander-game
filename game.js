@@ -61,6 +61,12 @@ const START_VX = 36;           // m/s rightward
 const START_THETA = 0.42;      // rad (~24°), nose left / engine lower-right (retro vs +vx)
 const RCS_FLAME_SCALE = 5;
 
+// Real Mission meteors
+const METEOR_MAX_COUNT = 16;
+const METEOR_SPAWN_INTERVAL = 1.1;
+const METEOR_MIN_R = 0.35;
+const METEOR_MAX_R = 1.0;
+
 const MODES = {
   easy: {
     id: 'easy',
@@ -87,13 +93,14 @@ const MODES = {
   real: {
     id: 'real',
     label: 'Real Mission',
-    desc: '하드 모드 + 연료 대폭 감소 + 시작 시 랜덤 회전. 속도 화살표 없음.',
+    desc: '하드 모드 + 연료 감소 + 랜덤 회전 + 운석. 속도 화살표 없음.',
     allowArrows: true,
     showVelocityArrow: false,
     terrain: 'hard',
     startFuel: START_FUEL_REAL,
     randomOmega: true,
-    omegaRange: 0.4,
+    omegaRange: 0.8,
+    meteors: true,
     landing: LANDING_DEFAULT,
   },
 };
@@ -227,6 +234,111 @@ function wrapDelta(wx, camX) {
   return dx;
 }
 
+function worldDistSq(ax, ay, bx, by) {
+  const dx = wrapDelta(bx, ax);
+  const dy = by - ay;
+  return dx * dx + dy * dy;
+}
+
+// ─── Meteors (Real Mission) ───────────────────────────────────────────────────
+let meteors = [];
+let meteorSpawnTimer = 0;
+let meteorRng = null;
+
+function initMeteors() {
+  meteors = [];
+  meteorSpawnTimer = 0;
+  if (!currentMode?.meteors) {
+    meteorRng = null;
+    return;
+  }
+  meteorRng = mulberry32(seed ^ 0x4d37540a);
+  const initialCount = 8 + Math.floor(meteorRng() * 5);
+  for (let i = 0; i < initialCount; i++) {
+    spawnMeteor(true);
+  }
+}
+
+function spawnMeteor(initial = false) {
+  if (!meteorRng || !lander) return;
+  const r = METEOR_MIN_R + meteorRng() * (METEOR_MAX_R - METEOR_MIN_R);
+  const spreadX = initial ? 500 + meteorRng() * 350 : 280 + meteorRng() * 220;
+  const x = wrapX(lander.x + (meteorRng() - 0.5) * spreadX);
+  const y = initial
+    ? lander.y - 60 - meteorRng() * 500
+    : camY - 120 - meteorRng() * 280;
+  meteors.push({
+    x,
+    y,
+    vx: (meteorRng() - 0.5) * 24,
+    vy: 14 + meteorRng() * 28,
+    r,
+  });
+}
+
+function updateMeteors() {
+  if (!currentMode?.meteors || !lander?.alive) return;
+
+  meteorSpawnTimer += DT;
+  while (meteorSpawnTimer >= METEOR_SPAWN_INTERVAL && meteors.length < METEOR_MAX_COUNT) {
+    meteorSpawnTimer -= METEOR_SPAWN_INTERVAL;
+    spawnMeteor(false);
+  }
+
+  const hitR = (LANDER_W / 2) * COLLISION_SCALE * 0.85;
+
+  for (const m of meteors) {
+    m.vy += G_MOON * DT;
+    m.x += m.vx * DT;
+    m.y += m.vy * DT;
+    m.x = wrapX(m.x);
+
+    if (worldDistSq(lander.x, lander.y, m.x, m.y) < (m.r + hitR) ** 2) {
+      lander.crashed = true;
+      lander.alive = false;
+      lander.crashReason = 'meteor';
+      return;
+    }
+  }
+
+  meteors = meteors.filter(m => {
+    const groundY = terrainHeightAt(terrain, m.x);
+    return m.y < groundY - m.r && m.y < camY + 700;
+  });
+}
+
+function drawMeteors(ctx, camX, camY) {
+  for (const m of meteors) {
+    const sx = toScreenX(m.x, camX);
+    const sy = toScreenY(m.y, camY);
+    if (sx < -30 || sx > W + 30 || sy < -30 || sy > H + 30) continue;
+
+    const pr = Math.max(2.5, m.r * PIXELS_PER_METER * LANDER_VISUAL_SCALE * 0.55);
+    const speed = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
+    if (speed > 2) {
+      const tx = sx - (m.vx / speed) * pr * 2.2;
+      const ty = sy - (m.vy / speed) * pr * 2.2;
+      const trail = ctx.createLinearGradient(sx, sy, tx, ty);
+      trail.addColorStop(0, 'rgba(255, 200, 120, 0.85)');
+      trail.addColorStop(1, 'rgba(255, 100, 40, 0)');
+      ctx.strokeStyle = trail;
+      ctx.lineWidth = Math.max(1, pr * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#5a4a3a';
+    ctx.strokeStyle = '#8a7a6a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
 function toScreenX(wx, camX) {
   return wrapDelta(wx, camX) * PIXELS_PER_METER + W / 2;
 }
@@ -289,6 +401,7 @@ class Lander {
     this.alive = true;
     this.landed = false;
     this.crashed = false;
+    this.crashReason = null;
     this.thrustOn = false;
     this.attLeft = false;
     this.attRight = false;
@@ -755,6 +868,7 @@ function initGame() {
   controlsHint.style.visibility = 'visible';
   modeLabelEl.textContent = currentMode.label;
   updateControlsHint();
+  initMeteors();
 }
 
 function startMode(modeId) {
@@ -766,6 +880,8 @@ function startMode(modeId) {
 function showModeSelect() {
   gameState = 'menu';
   currentMode = null;
+  meteors = [];
+  meteorRng = null;
   overlay.classList.add('hidden');
   hudEl.classList.add('hidden');
   controlsHint.style.visibility = 'hidden';
@@ -965,6 +1081,8 @@ function drawWorld() {
 
   drawTerrainTiles(camX, camY);
 
+  drawMeteors(ctx, camX, camY);
+
   // Velocity vector with arrowhead (lander at screen center)
   if (currentMode?.showVelocityArrow !== false) {
     const vsx = W / 2;
@@ -992,6 +1110,7 @@ function gameLoop(timestamp) {
     let steps = 0;
     while (accumulator >= DT && steps < MAX_SUBSTEPS) {
       lander.update(terrain);
+      updateMeteors();
       accumulator -= DT;
       steps++;
     }
@@ -1008,7 +1127,9 @@ function gameLoop(timestamp) {
       overlay.classList.remove('hidden');
     } else if (lander.crashed) {
       gameState = 'lost';
-      messageEl.innerHTML = '💥 충돌!<br><span style="font-size:16px;color:#aaa">속도·자세·회전이 너무 위험했습니다</span>';
+      messageEl.innerHTML = lander.crashReason === 'meteor'
+        ? '💥 운석 충돌!<br><span style="font-size:16px;color:#aaa">하늘에서 떨어진 운석에 맞았습니다</span>'
+        : '💥 충돌!<br><span style="font-size:16px;color:#aaa">속도·자세·회전이 너무 위험했습니다</span>';
       overlay.classList.remove('hidden');
     } else if (lander.y > terrainHeightAt(terrain, lander.x) + 500) {
       gameState = 'lost';
