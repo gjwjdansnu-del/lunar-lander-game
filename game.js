@@ -438,17 +438,74 @@ class Lander {
   }
 
   spawnAttParticle(px, py, fx, fy) {
-    const speed = 4 + Math.random() * 4;
     const mag = Math.sqrt(fx * fx + fy * fy) || 1;
-    this.particles.push({
-      x: px, y: py,
-      vx: -(fx / mag) * speed + this.vx,
-      vy: -(fy / mag) * speed + this.vy,
-      life: 0.15 + Math.random() * 0.1,
-      maxLife: 0.25,
-      size: 1.5,
-      color: '#88ccff',
-    });
+    const nx = -(fx / mag);
+    const ny = -(fy / mag);
+    for (let i = 0; i < 5; i++) {
+      const spread = (Math.random() - 0.5) * 0.6;
+      const speed = 10 + Math.random() * 14;
+      const cos = Math.cos(spread);
+      const sin = Math.sin(spread);
+      const dx = nx * cos - ny * sin;
+      const dy = nx * sin + ny * cos;
+      this.particles.push({
+        x: px + (Math.random() - 0.5) * 0.2,
+        y: py + (Math.random() - 0.5) * 0.2,
+        vx: dx * speed + this.vx,
+        vy: dy * speed + this.vy,
+        life: 0.25 + Math.random() * 0.2,
+        maxLife: 0.45,
+        size: 3.5 + Math.random() * 3,
+        color: `hsl(${20 + Math.random() * 35}, 100%, ${55 + Math.random() * 30}%)`,
+        glow: true,
+      });
+    }
+  }
+
+  drawAttThruster(ctx, nozzleX, nozzleY, exhaustX, exhaustY, active) {
+    const hw = LANDER_W / 2;
+    const hh = LANDER_H / 2;
+
+    // nozzle housing
+    ctx.fillStyle = active ? '#888' : '#555';
+    ctx.strokeStyle = active ? '#ffaa44' : '#666';
+    ctx.lineWidth = 0.06;
+    ctx.beginPath();
+    ctx.arc(nozzleX, nozzleY, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (!active) return;
+
+    const dx = exhaustX - nozzleX;
+    const dy = exhaustY - nozzleY;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const dirX = dx / len;
+    const dirY = dy / len;
+    const flameLen = 1.4;
+    const spread = 0.32;
+
+    // outer flame
+    const tipX = nozzleX + dirX * flameLen;
+    const tipY = nozzleY + dirY * flameLen;
+    const grad = ctx.createLinearGradient(nozzleX, nozzleY, tipX, tipY);
+    grad.addColorStop(0, 'rgba(255, 240, 120, 0.95)');
+    grad.addColorStop(0.45, 'rgba(255, 140, 30, 0.75)');
+    grad.addColorStop(1, 'rgba(255, 60, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(nozzleX + dirY * spread * 0.35, nozzleY - dirX * spread * 0.35);
+    ctx.lineTo(tipX + dirY * spread, tipY - dirX * spread);
+    ctx.lineTo(tipX - dirY * spread, tipY + dirX * spread);
+    ctx.lineTo(nozzleX - dirY * spread * 0.35, nozzleY + dirX * spread * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // bright core
+    ctx.fillStyle = '#fff8a0';
+    ctx.beginPath();
+    ctx.arc(nozzleX, nozzleY, 0.14, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   draw(ctx, camX, camY) {
@@ -500,15 +557,9 @@ class Lander {
     ctx.closePath();
     ctx.fill();
 
-    // Attitude thruster indicators
-    if (this.attLeft) {
-      ctx.fillStyle = '#ff8800';
-      ctx.fillRect(hw - 0.1, -hh - 0.1, 0.3, 0.2);
-    }
-    if (this.attRight) {
-      ctx.fillStyle = '#ff8800';
-      ctx.fillRect(-hw - 0.2, -hh - 0.1, 0.3, 0.2);
-    }
+    // Attitude thrusters (top corners)
+    this.drawAttThruster(ctx, hw, -hh, hw + 1.1, -hh, this.attLeft);
+    this.drawAttThruster(ctx, -hw, -hh, -hw - 1.1, -hh, this.attRight);
 
     ctx.restore();
 
@@ -518,10 +569,15 @@ class Lander {
       const psx = toScreenX(p.x, camX);
       const psy = toScreenY(p.y, camY);
       ctx.globalAlpha = alpha;
+      if (p.glow) {
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+      }
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(psx, psy, p.size * alpha, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
     ctx.globalAlpha = 1;
   }
