@@ -27,14 +27,26 @@ const ATT_THRUST = 180;        // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
-// Landing criteria
-const MAX_LANDING_VN = 3.0;      // m/s into ground along surface normal
-const MAX_LANDING_VT = 1.4;      // m/s along surface
-const MAX_LANDING_ANGLE = 14;    // degrees body tilt from upright
-const MAX_LANDING_OMEGA = 0.22;  // rad/s max spin at touchdown
-const CRASH_SPEED = 5.0;
-const CRASH_ANGLE = 50;
-const CRASH_OMEGA = 0.55;        // rad/s
+// Landing criteria (hard / real)
+const LANDING_DEFAULT = {
+  maxVn: 3.0,
+  maxVt: 1.4,
+  maxAngle: 14,
+  maxOmega: 0.22,
+  crashSpeed: 5.0,
+  crashAngle: 50,
+  crashOmega: 0.55,
+};
+
+const LANDING_EASY = {
+  maxVn: 5.5,
+  maxVt: 3.0,
+  maxAngle: 28,
+  maxOmega: 0.5,
+  crashSpeed: 7.5,
+  crashAngle: 70,
+  crashOmega: 0.9,
+};
 
 // World
 const WORLD_WIDTH_M = 4000;
@@ -54,6 +66,7 @@ const MODES = {
     terrain: 'easy',
     startFuel: START_FUEL_EASY,
     randomOmega: false,
+    landing: LANDING_EASY,
   },
   hard: {
     id: 'hard',
@@ -63,6 +76,7 @@ const MODES = {
     terrain: 'hard',
     startFuel: START_FUEL_EASY,
     randomOmega: false,
+    landing: LANDING_DEFAULT,
   },
   real: {
     id: 'real',
@@ -73,6 +87,7 @@ const MODES = {
     startFuel: START_FUEL_REAL,
     randomOmega: true,
     omegaRange: 0.4,
+    landing: LANDING_DEFAULT,
   },
 };
 
@@ -462,13 +477,15 @@ class Lander {
         const vNormal = Math.abs(this.vx * nx + this.vy * ny);
         const vTangent = Math.abs(this.vx * tx + this.vy * ty);
 
-        if (vTangent <= MAX_LANDING_VT &&
-            vNormal <= MAX_LANDING_VN &&
-            angleDeg <= MAX_LANDING_ANGLE &&
-            Math.abs(this.omega) <= MAX_LANDING_OMEGA) {
+        const lc = currentMode?.landing ?? LANDING_DEFAULT;
+
+        if (vTangent <= lc.maxVt &&
+            vNormal <= lc.maxVn &&
+            angleDeg <= lc.maxAngle &&
+            Math.abs(this.omega) <= lc.maxOmega) {
           this.landed = true;
           this.alive = false;
-        } else if (speed > CRASH_SPEED || angleDeg > CRASH_ANGLE || Math.abs(this.omega) > CRASH_OMEGA) {
+        } else if (speed > lc.crashSpeed || angleDeg > lc.crashAngle || Math.abs(this.omega) > lc.crashOmega) {
           this.crashed = true;
           this.alive = false;
         }
