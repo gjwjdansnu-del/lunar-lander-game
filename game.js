@@ -719,40 +719,11 @@ function drawMinimap() {
   ctx.stroke();
 }
 
-function drawCraterTexture(camX, camY, offset) {
-  const speckRng = mulberry32(seed ^ 0xB01D12);
-  for (const crater of terrainCraters) {
-    const wx = crater.cx + offset;
-    const sx = toScreenX(wx, camX);
-    const sy = toScreenY(terrainHeightAt(terrain, crater.cx), camY);
-    const r = crater.cr * PIXELS_PER_METER * 0.45;
-    if (sx < -r * 2 || sx > W + r * 2) continue;
-
-    ctx.fillStyle = 'rgba(30, 30, 38, 0.28)';
-    ctx.beginPath();
-    ctx.ellipse(sx, sy + r * 0.2, r, r * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(210, 210, 220, 0.14)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy - r * 0.05, r * 1.08, r * 0.48, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  for (let i = 0; i < 60; i++) {
-    const wx = speckRng() * WORLD_WIDTH_M + offset;
-    const sx = toScreenX(wx, camX);
-    const sy = toScreenY(terrainHeightAt(terrain, wx), camY);
-    if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
-    const shade = speckRng();
-    ctx.fillStyle = shade > 0.5 ? 'rgba(200,200,210,0.08)' : 'rgba(50,50,58,0.1)';
-    ctx.fillRect(sx, sy - speckRng() * 6, 1 + speckRng() * 2, 1 + speckRng());
-  }
-}
-
 function drawTerrainTiles(camX, camY) {
   const screenBottom = H + 100;
+  const MOON_FILL = '#7a7a84';
+  const MOON_SURFACE = '#b0b0ba';
+  const MAX_SEG_DX = W * 0.55;
 
   for (let tile = -1; tile <= 1; tile++) {
     const offset = tile * WORLD_WIDTH_M;
@@ -762,34 +733,36 @@ function drawTerrainTiles(camX, camY) {
       sy: toScreenY(pt.y, camY),
     }));
 
-    ctx.beginPath();
-    ctx.moveTo(surfacePts[0].sx, surfacePts[0].sy);
-    for (let i = 1; i < surfacePts.length; i++) {
-      ctx.lineTo(surfacePts[i].sx, surfacePts[i].sy);
+    // segment quads below surface — never seal with a screen-wide horizontal line
+    ctx.fillStyle = MOON_FILL;
+    for (let i = 0; i < surfacePts.length - 1; i++) {
+      const p0 = surfacePts[i];
+      const p1 = surfacePts[i + 1];
+      if (Math.abs(p1.sx - p0.sx) > MAX_SEG_DX) continue;
+      ctx.beginPath();
+      ctx.moveTo(p0.sx, p0.sy);
+      ctx.lineTo(p1.sx, p1.sy);
+      ctx.lineTo(p1.sx, screenBottom);
+      ctx.lineTo(p0.sx, screenBottom);
+      ctx.closePath();
+      ctx.fill();
     }
-    const firstSx = surfacePts[0].sx;
-    const lastSx = surfacePts[surfacePts.length - 1].sx;
-    ctx.lineTo(lastSx, screenBottom);
-    ctx.lineTo(firstSx, screenBottom);
-    ctx.closePath();
-
-    const avgSy = surfacePts.reduce((s, p) => s + p.sy, 0) / surfacePts.length;
-    const grad = ctx.createLinearGradient(0, avgSy - 60, 0, screenBottom);
-    grad.addColorStop(0, '#a8a8b2');
-    grad.addColorStop(0.12, '#8e8e98');
-    grad.addColorStop(0.5, '#6e6e78');
-    grad.addColorStop(1, '#45454d');
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    drawCraterTexture(camX, camY, offset);
 
     ctx.beginPath();
-    ctx.moveTo(surfacePts[0].sx, surfacePts[0].sy);
-    for (let i = 1; i < surfacePts.length; i++) {
-      ctx.lineTo(surfacePts[i].sx, surfacePts[i].sy);
+    let drawing = false;
+    for (let i = 0; i < surfacePts.length; i++) {
+      const p = surfacePts[i];
+      if (i > 0 && Math.abs(p.sx - surfacePts[i - 1].sx) > MAX_SEG_DX) {
+        drawing = false;
+      }
+      if (!drawing) {
+        ctx.moveTo(p.sx, p.sy);
+        drawing = true;
+      } else {
+        ctx.lineTo(p.sx, p.sy);
+      }
     }
-    ctx.strokeStyle = '#c4c4ce';
+    ctx.strokeStyle = MOON_SURFACE;
     ctx.lineWidth = 1.2;
     ctx.stroke();
   }
