@@ -62,8 +62,8 @@ const START_THETA = 0.42;      // rad (~24°), nose left / engine lower-right (r
 const RCS_FLAME_SCALE = 5;
 
 // Real Mission meteors
-const METEOR_MAX_COUNT = 16;
-const METEOR_SPAWN_INTERVAL = 1.1;
+const METEOR_MAX_COUNT = 32;
+const METEOR_SPAWN_INTERVAL = 0.55;
 const METEOR_MIN_R = 0.35;
 const METEOR_MAX_R = 1.0;
 const FUEL_LOW_DISPLAY_PCT = 20; // HUD 기준 이 이하면 "연료부족!"
@@ -254,7 +254,7 @@ function initMeteors() {
     return;
   }
   meteorRng = mulberry32(seed ^ 0x4d37540a);
-  const initialCount = 8 + Math.floor(meteorRng() * 5);
+  const initialCount = 16 + Math.floor(meteorRng() * 10);
   for (let i = 0; i < initialCount; i++) {
     spawnMeteor(true);
   }
