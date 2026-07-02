@@ -553,8 +553,8 @@ class Lander {
     // RCS thrusters at top corners
     ctx.fillStyle = '#666';
     ctx.beginPath();
-    ctx.arc(hw, -hh, 0.09 * RCS_FLAME_SCALE, 0, Math.PI * 2);
-    ctx.arc(-hw, -hh, 0.09 * RCS_FLAME_SCALE, 0, Math.PI * 2);
+    ctx.arc(hw, -hh, 0.09, 0, Math.PI * 2);
+    ctx.arc(-hw, -hh, 0.09, 0, Math.PI * 2);
     ctx.fill();
 
     // ← : right corner fires +x (CCW torque) | → : left corner fires -x
