@@ -38,7 +38,8 @@ const CRASH_ANGLE = 55;
 // World
 const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
-const START_FUEL = 20;       // 1/5 of original 100%
+const START_FUEL = 20;       // actual fuel tank (1/5 of original 100%)
+const FUEL_DISPLAY_SCALE = 100 / START_FUEL; // show 100% at full tank
 
 // Minimap
 const MINIMAP = { w: 220, h: 130, margin: 10 };
@@ -607,10 +608,14 @@ function initGame() {
   overlay.classList.add('hidden');
 }
 
+function fuelDisplayPct(actual) {
+  return actual * FUEL_DISPLAY_SCALE;
+}
+
 function updateHUD() {
   const groundY = terrainHeightAt(terrain, lander.x);
   const alt = Math.max(0, groundY - lander.y);
-  document.getElementById('fuel').textContent = lander.fuel.toFixed(1);
+  document.getElementById('fuel').textContent = fuelDisplayPct(lander.fuel).toFixed(1);
   document.getElementById('altitude').textContent = alt.toFixed(1);
   document.getElementById('vx').textContent = lander.vx.toFixed(2);
   document.getElementById('vy').textContent = lander.vy.toFixed(2);
@@ -825,7 +830,7 @@ function gameLoop(timestamp) {
 
     if (lander.landed) {
       gameState = 'won';
-      const fuelLeft = lander.fuel.toFixed(1);
+      const fuelLeft = fuelDisplayPct(lander.fuel).toFixed(1);
       messageEl.innerHTML = '🎉 착륙 성공!<br><span style="font-size:16px;color:#aaa">남은 연료: ' + fuelLeft + '%</span>';
       overlay.classList.remove('hidden');
     } else if (lander.crashed) {
