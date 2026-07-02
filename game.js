@@ -66,6 +66,7 @@ const METEOR_MAX_COUNT = 16;
 const METEOR_SPAWN_INTERVAL = 1.1;
 const METEOR_MIN_R = 0.35;
 const METEOR_MAX_R = 1.0;
+const FUEL_LOW_DISPLAY_PCT = 20; // HUD 기준 이 이하면 "연료부족!"
 
 const MODES = {
   easy: {
@@ -893,6 +894,42 @@ function fuelDisplayPct(actual) {
   return actual * fuelDisplayScale;
 }
 
+function drawFuelWarning(ctx) {
+  if (!lander?.alive) return;
+
+  let text = null;
+  let color = null;
+  if (lander.fuel <= 0) {
+    text = '연료없음!';
+    color = '#ff4444';
+  } else if (fuelDisplayPct(lander.fuel) <= FUEL_LOW_DISPLAY_PCT) {
+    text = '연료부족!';
+    color = '#ffaa22';
+  }
+  if (!text) return;
+
+  const aboveDist = (LANDER_H / 2 + LEG_LEN + 0.7) * PIXELS_PER_METER * LANDER_VISUAL_SCALE;
+  const sx = W / 2 - aboveDist * Math.sin(lander.theta);
+  const sy = H / 2 - aboveDist * Math.cos(lander.theta);
+
+  const pulse = lander.fuel <= 0
+    ? 0.55 + 0.45 * Math.sin(performance.now() * 0.012)
+    : 0.75 + 0.25 * Math.sin(performance.now() * 0.008);
+
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.font = 'bold 17px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.lineWidth = 4;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, sx, sy);
+  ctx.fillStyle = color;
+  ctx.fillText(text, sx, sy);
+  ctx.restore();
+}
+
 function updateHUD() {
   const groundY = terrainHeightAt(terrain, lander.x);
   const alt = Math.max(0, groundY - lander.y);
@@ -1093,6 +1130,7 @@ function drawWorld() {
   }
 
   lander.draw(ctx, camX, camY);
+  drawFuelWarning(ctx);
 
   drawMinimap();
 }
