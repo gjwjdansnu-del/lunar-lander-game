@@ -39,11 +39,48 @@ const CRASH_OMEGA = 0.55;        // rad/s
 // World
 const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
-const START_FUEL = 20;       // actual fuel tank (1/5 of original 100%)
-const START_VX = -36;          // m/s leftward (retro-friendly with nose-left pitch)
-const START_THETA = -0.42;     // rad (~24°), nose points left
-const FUEL_DISPLAY_SCALE = 100 / START_FUEL; // show 100% at full tank
+const START_FUEL_EASY = 20;
+const START_FUEL_REAL = 7;     // real mission: much less fuel (still shows 100% at start)
+const START_VX = -36;
+const START_THETA = -0.42;
 const RCS_FLAME_SCALE = 5;
+
+const MODES = {
+  easy: {
+    id: 'easy',
+    label: '이지 모드',
+    desc: '현재 설정 그대로. 화살표 키 + WASD 조작, 완만한 지형.',
+    allowArrows: true,
+    terrain: 'easy',
+    startFuel: START_FUEL_EASY,
+    randomOmega: false,
+  },
+  hard: {
+    id: 'hard',
+    label: '하드 모드',
+    desc: 'WASD만 사용. 가파르고 복잡한 지형.',
+    allowArrows: false,
+    terrain: 'hard',
+    startFuel: START_FUEL_EASY,
+    randomOmega: false,
+  },
+  real: {
+    id: 'real',
+    label: 'Real Mission',
+    desc: '하드 모드 + 연료 대폭 감소 + 시작 시 랜덤 회전.',
+    allowArrows: false,
+    terrain: 'hard',
+    startFuel: START_FUEL_REAL,
+    randomOmega: true,
+    omegaRange: 0.4,
+  },
+};
+
+const MODE_DESC = {
+  easy: MODES.easy.desc,
+  hard: MODES.hard.desc,
+  real: MODES.real.desc,
+};
 
 // Minimap
 const MINIMAP = { w: 220, h: 130, margin: 10 };
@@ -64,46 +101,53 @@ window.addEventListener('keyup', e => { keys[e.code] = false; });
 // ─── Terrain generation (midpoint displacement) ─────────────────────────────
 let terrainCraters = [];
 
-function generateTerrain(seed) {
+function generateTerrain(seed, difficulty = 'easy') {
   const rng = mulberry32(seed);
   const segW = WORLD_WIDTH_M / TERRAIN_SEGMENTS;
+  const hard = difficulty === 'hard';
 
   const craters = [];
-  const numCraters = 10 + Math.floor(rng() * 12);
+  const numCraters = hard ? 16 + Math.floor(rng() * 18) : 10 + Math.floor(rng() * 12);
   for (let c = 0; c < numCraters; c++) {
     craters.push({
       cx: rng() * WORLD_WIDTH_M,
-      cr: 25 + rng() * 70,
-      depth: 5 + rng() * 14,
-      rim: 2 + rng() * 4,
+      cr: hard ? 20 + rng() * 90 : 25 + rng() * 70,
+      depth: hard ? 10 + rng() * 28 : 5 + rng() * 14,
+      rim: hard ? 3 + rng() * 7 : 2 + rng() * 4,
     });
   }
   terrainCraters = craters;
 
   const heights = new Float64Array(TERRAIN_SEGMENTS + 1);
   for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
-    heights[i] = 70 + rng() * 50;
+    heights[i] = hard ? 50 + rng() * 90 : 70 + rng() * 50;
   }
 
   function displace(lo, hi, amount) {
     if (hi - lo <= 1) return;
     const mid = (lo + hi) >> 1;
     heights[mid] = (heights[lo] + heights[hi]) / 2 + (rng() - 0.5) * amount;
-    const half = amount * 0.5;
+    const half = amount * (hard ? 0.52 : 0.5);
     displace(lo, mid, half);
     displace(mid, hi, half);
   }
-  displace(0, TERRAIN_SEGMENTS, 90);
+  displace(0, TERRAIN_SEGMENTS, hard ? 170 : 90);
 
   const pts = [];
   for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
     const x = i * segW;
     let y = heights[i];
 
-    // gentle rolling hills
-    y += Math.sin(x * 0.005) * 12;
-    y += Math.sin(x * 0.014 + 1.8) * 6;
-    y += (rng() - 0.5) * 3;
+    if (hard) {
+      y += Math.sin(x * 0.006) * 28;
+      y += Math.sin(x * 0.019 + 2.1) * 14;
+      y += Math.sin(x * 0.042 + 0.7) * 7;
+      y += (rng() - 0.5) * 8;
+    } else {
+      y += Math.sin(x * 0.005) * 12;
+      y += Math.sin(x * 0.014 + 1.8) * 6;
+      y += (rng() - 0.5) * 3;
+    }
 
     for (const crater of craters) {
       let dx = x - crater.cx;
@@ -112,10 +156,15 @@ function generateTerrain(seed) {
       if (dist < crater.cr) {
         const t = dist / crater.cr;
         y -= crater.depth * (1 - t * t);
-        if (dist > crater.cr * 0.8) {
-          y += crater.rim * (1 - Math.abs(t - 0.95) / 0.05);
+        if (dist > crater.cr * (hard ? 0.75 : 0.8)) {
+          const rimT = hard ? 0.1 : 0.05;
+          y += crater.rim * (1 - Math.abs(t - 0.95) / rimT);
         }
       }
+    }
+
+    if (hard && rng() < 0.035 && i > 5 && i < TERRAIN_SEGMENTS - 5) {
+      y += (rng() - 0.3) * 40;
     }
 
     pts.push({ x, y });
@@ -253,9 +302,10 @@ class Lander {
   update(terrain) {
     if (!this.alive) return;
 
-    const thrustKey = keys['ArrowUp'] || keys['KeyW'];
-    const leftKey = keys['ArrowLeft'] || keys['KeyA'];
-    const rightKey = keys['ArrowRight'] || keys['KeyD'];
+    const allowArrows = currentMode.allowArrows;
+    const thrustKey = keys['KeyW'] || (allowArrows && keys['ArrowUp']);
+    const leftKey = keys['KeyA'] || (allowArrows && keys['ArrowLeft']);
+    const rightKey = keys['KeyD'] || (allowArrows && keys['ArrowRight']);
 
     this.thrustOn = thrustKey && this.fuel > 0;
     this.attLeft = leftKey && this.fuel > 0;
@@ -593,30 +643,72 @@ class Lander {
 
 // ─── Game state ────────────────────────────────────────────────────────────────
 let terrain, lander, camX, camY, seed, gameState;
+let currentMode = null;
+let fuelDisplayScale = 100 / START_FUEL_EASY;
 const overlay = document.getElementById('overlay');
 const messageEl = document.getElementById('message');
 const restartBtn = document.getElementById('restart-btn');
+const modeSelect = document.getElementById('mode-select');
+const modeDescEl = document.getElementById('mode-desc');
+const hudEl = document.getElementById('hud');
+const controlsHint = document.getElementById('controls-hint');
+const modeLabelEl = document.getElementById('mode-label');
+
+function updateControlsHint() {
+  if (!currentMode) return;
+  controlsHint.textContent = currentMode.allowArrows
+    ? '↑/W: 추진  |  ←→/A/D: 자세 제어'
+    : 'W: 추진  |  A/D: 자세 제어';
+}
 
 function initGame() {
+  if (!currentMode) return;
+
   seed = Math.floor(Math.random() * 1e9);
-  terrain = generateTerrain(seed);
+  terrain = generateTerrain(seed, currentMode.terrain);
+  fuelDisplayScale = 100 / currentMode.startFuel;
 
   const startX = wrapX(WORLD_WIDTH_M * (0.25 + Math.random() * 0.5));
   const groundY = terrainHeightAt(terrain, startX);
-  const startY = groundY - 120; // start 120m above ground
-  const startVx = START_VX;
-  const startFuel = START_FUEL;
+  const startY = groundY - 120;
+  const startFuel = currentMode.startFuel;
 
-  lander = new Lander(startX, startY, startVx, 0, startFuel);
+  lander = new Lander(startX, startY, START_VX, 0, startFuel);
   lander.theta = START_THETA;
+
+  if (currentMode.randomOmega) {
+    const rng = mulberry32(seed ^ 0xDEADBEEF);
+    lander.omega = (rng() * 2 - 1) * currentMode.omegaRange;
+  }
+
   camX = lander.x;
   camY = lander.y;
   gameState = 'playing';
   overlay.classList.add('hidden');
+  hudEl.classList.remove('hidden');
+  controlsHint.style.visibility = 'visible';
+  modeLabelEl.textContent = currentMode.label;
+  updateControlsHint();
+}
+
+function startMode(modeId) {
+  currentMode = MODES[modeId];
+  modeSelect.classList.add('hidden');
+  initGame();
+}
+
+function showModeSelect() {
+  gameState = 'menu';
+  currentMode = null;
+  overlay.classList.add('hidden');
+  hudEl.classList.add('hidden');
+  controlsHint.style.visibility = 'hidden';
+  modeSelect.classList.remove('hidden');
+  modeDescEl.textContent = MODE_DESC.easy;
 }
 
 function fuelDisplayPct(actual) {
-  return actual * FUEL_DISPLAY_SCALE;
+  return actual * fuelDisplayScale;
 }
 
 function updateHUD() {
@@ -781,6 +873,12 @@ function drawTerrainTiles(camX, camY) {
 }
 
 function drawWorld() {
+  if (gameState === 'menu') {
+    ctx.fillStyle = '#000008';
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+
   // Sky gradient
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#000008');
@@ -855,7 +953,16 @@ function gameLoop(timestamp) {
   requestAnimationFrame(gameLoop);
 }
 
-restartBtn.addEventListener('click', initGame);
+restartBtn.addEventListener('click', () => {
+  if (currentMode) initGame();
+});
 
-initGame();
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('mouseenter', () => {
+    modeDescEl.textContent = MODE_DESC[btn.dataset.mode];
+  });
+  btn.addEventListener('click', () => startMode(btn.dataset.mode));
+});
+
+showModeSelect();
 requestAnimationFrame(gameLoop);

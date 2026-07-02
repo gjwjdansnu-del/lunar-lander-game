@@ -116,3 +116,89 @@ body {
 #restart-btn:hover {
   background: #2a5a2a;
 }
+
+#mode-select {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  z-index: 20;
+}
+
+#mode-select.hidden {
+  display: none;
+}
+
+#mode-select h2 {
+  color: #e8e8f0;
+  font-size: 26px;
+  font-weight: normal;
+  letter-spacing: 0.1em;
+}
+
+.mode-subtitle {
+  color: #666;
+  font-size: 13px;
+}
+
+.mode-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+}
+
+.mode-btn {
+  padding: 14px 20px;
+  font-size: 16px;
+  font-family: inherit;
+  background: #14141e;
+  color: #c8c8d8;
+  border: 2px solid #444;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mode-btn:hover {
+  border-color: #0f0;
+  background: #1a2a1a;
+  color: #0f0;
+}
+
+.mode-btn[data-mode="hard"]:hover {
+  border-color: #fa0;
+  background: #2a2210;
+  color: #fa0;
+}
+
+.mode-btn[data-mode="real"]:hover {
+  border-color: #f44;
+  background: #2a1010;
+  color: #f66;
+}
+
+.mode-desc {
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+  max-width: 360px;
+  line-height: 1.5;
+  min-height: 36px;
+}
+
+#hud.hidden {
+  display: none;
+}
+
+.mode-tag {
+  color: #8af;
+  border: 1px solid #48a;
+  padding: 1px 6px;
+  font-size: 11px;
+}
