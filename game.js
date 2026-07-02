@@ -637,13 +637,14 @@ function drawMinimap() {
   ctx.fillStyle = 'rgba(0, 255, 100, 0.7)';
   ctx.fillText('MAP', mx + 6, my + 12);
 
-  // terrain fill
+  // terrain fill (down to minimap bottom — no floating horizontal band)
+  const mapBottom = my + h;
   ctx.beginPath();
-  ctx.moveTo(toMapX(terrain[0].x), toMapY(bounds.maxY));
+  ctx.moveTo(toMapX(terrain[0].x), mapBottom);
   for (const pt of terrain) {
     ctx.lineTo(toMapX(pt.x), toMapY(pt.y));
   }
-  ctx.lineTo(toMapX(terrain[terrain.length - 1].x), toMapY(bounds.maxY));
+  ctx.lineTo(toMapX(terrain[terrain.length - 1].x), mapBottom);
   ctx.closePath();
   ctx.fillStyle = '#3a3428';
   ctx.fill();
@@ -683,12 +684,11 @@ function drawMinimap() {
 }
 
 function drawTerrainTiles(camX, camY) {
-  const floorY = getTerrainBounds().maxY + 200;
+  const screenBottom = H + 100;
 
   for (let tile = -1; tile <= 1; tile++) {
     const offset = tile * WORLD_WIDTH_M;
 
-    // fill (closed polygon, no stroke on bottom edge)
     ctx.beginPath();
     let started = false;
     for (const pt of terrain) {
@@ -699,9 +699,8 @@ function drawTerrainTiles(camX, camY) {
     }
     const firstSx = toScreenX(terrain[0].x + offset, camX);
     const lastSx = toScreenX(terrain[terrain.length - 1].x + offset, camX);
-    const bottomY = toScreenY(floorY, camY);
-    ctx.lineTo(lastSx, bottomY);
-    ctx.lineTo(firstSx, bottomY);
+    ctx.lineTo(lastSx, screenBottom);
+    ctx.lineTo(firstSx, screenBottom);
     ctx.closePath();
     ctx.fillStyle = '#4a4035';
     ctx.fill();
