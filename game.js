@@ -4,7 +4,9 @@ const PIXELS_PER_METER = 3.5;  // rendering scale (lower = more zoomed out)
 const LANDER_VISUAL_SCALE = 2.4; // draw lander larger without changing physics/camera
 const CAM_Y_LEAD = 0;          // 0 = lander always at screen center
 const DT = 1 / 120;            // fixed physics timestep (s)
-const MAX_SUBSTEPS = 4;
+const MAX_SUBSTEPS = 16;       // allow catch-up when frames hitch (was 4 → caused slow/fast drift)
+const MAX_FRAME_DELTA = 0.1;   // cap single-frame delta (tab resume etc.)
+const MAX_ACCUMULATOR = DT * MAX_SUBSTEPS * 2;
 
 // Lander geometry (meters)
 const LANDER_W = 3.2;
@@ -127,6 +129,10 @@ canvas.height = H;
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) resetGameTiming();
+});
 
 // ─── Terrain generation (midpoint displacement) ─────────────────────────────
 let terrainCraters = [];
@@ -897,6 +903,7 @@ function initGame() {
   modeLabelEl.textContent = currentMode.label;
   updateControlsHint();
   initMeteors();
+  resetGameTiming();
 }
 
 function startMode(modeId) {
@@ -1165,19 +1172,29 @@ function drawWorld() {
 let lastTime = 0;
 let accumulator = 0;
 
+function resetGameTiming() {
+  lastTime = 0;
+  accumulator = 0;
+}
+
 function gameLoop(timestamp) {
   if (!lastTime) lastTime = timestamp;
-  let frameTime = Math.min((timestamp - lastTime) / 1000, 0.05);
+  let frameTime = Math.min((timestamp - lastTime) / 1000, MAX_FRAME_DELTA);
   lastTime = timestamp;
-  accumulator += frameTime;
 
   if (gameState === 'playing') {
+    accumulator = Math.min(accumulator + frameTime, MAX_ACCUMULATOR);
+
     let steps = 0;
     while (accumulator >= DT && steps < MAX_SUBSTEPS) {
       lander.update(terrain);
       updateMeteors();
       accumulator -= DT;
       steps++;
+    }
+
+    if (accumulator > DT * MAX_SUBSTEPS) {
+      accumulator = DT * MAX_SUBSTEPS;
     }
 
     camX = lander.x;
@@ -1201,6 +1218,8 @@ function gameLoop(timestamp) {
       messageEl.innerHTML = '💥 지형과 충돌!<br><span style="font-size:16px;color:#aaa">고도가 너무 낮았습니다</span>';
       overlay.classList.remove('hidden');
     }
+  } else {
+    accumulator = 0;
   }
 
   drawWorld();
