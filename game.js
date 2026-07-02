@@ -2,7 +2,7 @@
 const G_MOON = 1.62;           // m/s² lunar gravity
 const PIXELS_PER_METER = 3.5;  // rendering scale (lower = more zoomed out)
 const LANDER_VISUAL_SCALE = 2.4; // draw lander larger without changing physics/camera
-const CAM_Y_LEAD = 40;         // camera looks this many meters below lander (shows ground)
+const CAM_Y_LEAD = 0;          // 0 = lander always at screen center
 const DT = 1 / 120;            // fixed physics timestep (s)
 const MAX_SUBSTEPS = 4;
 
@@ -18,10 +18,10 @@ const DRY_MASS = 400;          // kg (empty)
 const MAX_FUEL = 100;          // %
 const FUEL_MASS = LANDER_MASS - DRY_MASS;
 
-// Thrust (tuned for START_FUEL mass — matches original 100%-fuel handling feel)
-const MAIN_THRUST = 1500;      // N
+// Thrust
+const MAIN_THRUST = 3200;      // N
 const MAIN_FUEL_RATE = 0.35;   // %/s at full thrust
-const ATT_THRUST = 85;         // N per side thruster
+const ATT_THRUST = 180;        // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
@@ -94,7 +94,8 @@ function generateTerrain(seed) {
     y += (rng() - 0.5) * 10;
 
     for (const crater of craters) {
-      const dx = x - crater.cx;
+      let dx = x - crater.cx;
+      dx -= Math.round(dx / WORLD_WIDTH_M) * WORLD_WIDTH_M;
       const dist = Math.abs(dx);
       if (dist < crater.cr) {
         const t = dist / crater.cr;
@@ -112,6 +113,18 @@ function generateTerrain(seed) {
 
     pts.push({ x, y });
   }
+
+  // seamless horizontal loop
+  const blend = 40;
+  for (let i = 0; i <= blend; i++) {
+    const t = i / blend;
+    const ri = pts.length - 1 - i;
+    const avg = (pts[i].y + pts[ri].y) / 2;
+    pts[i].y = pts[i].y * (1 - t * 0.6) + avg * (t * 0.6);
+    pts[ri].y = pts[ri].y * (1 - t * 0.6) + avg * (t * 0.6);
+  }
+  pts[pts.length - 1].y = pts[0].y;
+
   return pts;
 }
 
@@ -124,7 +137,28 @@ function mulberry32(seed) {
   };
 }
 
+function wrapX(x) {
+  x = x % WORLD_WIDTH_M;
+  if (x < 0) x += WORLD_WIDTH_M;
+  return x;
+}
+
+function wrapDelta(wx, camX) {
+  let dx = wx - camX;
+  dx -= Math.round(dx / WORLD_WIDTH_M) * WORLD_WIDTH_M;
+  return dx;
+}
+
+function toScreenX(wx, camX) {
+  return wrapDelta(wx, camX) * PIXELS_PER_METER + W / 2;
+}
+
+function toScreenY(wy, camY) {
+  return (wy - camY) * PIXELS_PER_METER + H / 2;
+}
+
 function terrainHeightAt(terrain, x) {
+  x = wrapX(x);
   if (x <= terrain[0].x) return terrain[0].y;
   if (x >= terrain[terrain.length - 1].x) return terrain[terrain.length - 1].y;
   let lo = 0, hi = terrain.length - 1;
@@ -262,6 +296,7 @@ class Lander {
     // Integrate position & angle (semi-implicit Euler)
     this.x += this.vx * DT;
     this.y += this.vy * DT;
+    this.x = wrapX(this.x);
     this.theta += this.omega * DT;
 
     // Normalize angle
@@ -421,8 +456,8 @@ class Lander {
   }
 
   draw(ctx, camX, camY) {
-    const sx = (this.x - camX) * PIXELS_PER_METER + W / 2;
-    const sy = (this.y - camY) * PIXELS_PER_METER + H / 2;
+    const sx = toScreenX(this.x, camX);
+    const sy = toScreenY(this.y, camY);
 
     ctx.save();
     ctx.translate(sx, sy);
@@ -484,8 +519,8 @@ class Lander {
     // Particles
     for (const p of this.particles) {
       const alpha = p.life / p.maxLife;
-      const psx = (p.x - camX) * PIXELS_PER_METER + W / 2;
-      const psy = (p.y - camY) * PIXELS_PER_METER + H / 2;
+      const psx = toScreenX(p.x, camX);
+      const psy = toScreenY(p.y, camY);
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
       ctx.beginPath();
@@ -521,7 +556,7 @@ function initGame() {
     }
   }
 
-  const startX = bestX - 300;
+  const startX = wrapX(bestX - 300);
   const groundY = terrainHeightAt(terrain, startX);
   const startY = groundY - 120; // start 120m above ground
   const startVx = 18; // m/s horizontal (fixed)
@@ -529,7 +564,7 @@ function initGame() {
 
   lander = new Lander(startX, startY, startVx, 0, startFuel);
   camX = lander.x;
-  camY = lander.y + CAM_Y_LEAD;
+  camY = lander.y;
   gameState = 'playing';
   overlay.classList.add('hidden');
 
@@ -637,17 +672,17 @@ function drawMinimap() {
     ctx.setLineDash([]);
   }
 
-  // viewport
+  // viewport (centered on lander)
   const viewW = W / PIXELS_PER_METER;
   const viewH = H / PIXELS_PER_METER;
-  const vx = camX - viewW / 2;
-  const vy = camY - viewH / 2;
+  const vx = wrapX(lander.x) - viewW / 2;
+  const vy = lander.y - viewH / 2;
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
   ctx.lineWidth = 1;
   ctx.strokeRect(toMapX(vx), toMapY(vy), viewW * scaleX, viewH * scaleY);
 
   // lander
-  const lx = toMapX(lander.x);
+  const lx = toMapX(wrapX(lander.x));
   const ly = toMapY(lander.y);
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
@@ -661,6 +696,33 @@ function drawMinimap() {
   ctx.stroke();
 }
 
+function drawTerrainTiles(camX, camY) {
+  const floorY = getTerrainBounds().maxY + 200;
+
+  for (let tile = -1; tile <= 1; tile++) {
+    const offset = tile * WORLD_WIDTH_M;
+    ctx.beginPath();
+    let started = false;
+    for (const pt of terrain) {
+      const sx = toScreenX(pt.x + offset, camX);
+      const sy = toScreenY(pt.y, camY);
+      if (!started) { ctx.moveTo(sx, sy); started = true; }
+      else ctx.lineTo(sx, sy);
+    }
+    const firstSx = toScreenX(terrain[0].x + offset, camX);
+    const lastSx = toScreenX(terrain[terrain.length - 1].x + offset, camX);
+    const bottomY = toScreenY(floorY, camY);
+    ctx.lineTo(lastSx, bottomY);
+    ctx.lineTo(firstSx, bottomY);
+    ctx.closePath();
+    ctx.fillStyle = '#4a4035';
+    ctx.fill();
+    ctx.strokeStyle = '#6a6055';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
 function drawWorld() {
   // Sky gradient
   const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -672,7 +734,7 @@ function drawWorld() {
   // Stars
   const starRng = mulberry32(seed);
   for (let i = 0; i < 120; i++) {
-    const sx = (starRng() * WORLD_WIDTH_M - camX) * PIXELS_PER_METER + W / 2;
+    const sx = toScreenX(starRng() * WORLD_WIDTH_M, camX);
     const sy = starRng() * H * 0.6;
     if (sx > -2 && sx < W + 2) {
       ctx.fillStyle = `rgba(255,255,255,${0.3 + starRng() * 0.7})`;
@@ -680,31 +742,12 @@ function drawWorld() {
     }
   }
 
-  // Terrain
-  ctx.beginPath();
-  let started = false;
-  for (const pt of terrain) {
-    const sx = (pt.x - camX) * PIXELS_PER_METER + W / 2;
-    const sy = (pt.y - camY) * PIXELS_PER_METER + H / 2;
-    if (!started) { ctx.moveTo(sx, sy); started = true; }
-    else ctx.lineTo(sx, sy);
-  }
-  const bottomY = (terrain[terrain.length - 1].y + 200 - camY) * PIXELS_PER_METER + H / 2;
-  const leftX = (terrain[0].x - camX) * PIXELS_PER_METER + W / 2;
-  const rightX = (terrain[terrain.length - 1].x - camX) * PIXELS_PER_METER + W / 2;
-  ctx.lineTo(rightX, bottomY);
-  ctx.lineTo(leftX, bottomY);
-  ctx.closePath();
-  ctx.fillStyle = '#4a4035';
-  ctx.fill();
-  ctx.strokeStyle = '#6a6055';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  drawTerrainTiles(camX, camY);
 
   // Landing zone indicator
   if (lander.targetX) {
-    const tx = (lander.targetX - camX) * PIXELS_PER_METER + W / 2;
-    const ty = (terrainHeightAt(terrain, lander.targetX) - camY) * PIXELS_PER_METER + H / 2;
+    const tx = toScreenX(lander.targetX, camX);
+    const ty = toScreenY(terrainHeightAt(terrain, lander.targetX), camY);
     ctx.strokeStyle = 'rgba(0,255,0,0.4)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
@@ -718,9 +761,9 @@ function drawWorld() {
     ctx.fillText('착륙 지점', tx - 24, ty - 6);
   }
 
-  // Velocity vector with arrowhead
-  const vsx = (lander.x - camX) * PIXELS_PER_METER + W / 2;
-  const vsy = (lander.y - camY) * PIXELS_PER_METER + H / 2;
+  // Velocity vector with arrowhead (lander at screen center)
+  const vsx = W / 2;
+  const vsy = H / 2;
   const vex = vsx + lander.vx * 10;
   const vey = vsy + lander.vy * 10;
   drawArrow(ctx, vsx, vsy, vex, vey, 'rgba(255,255,0,0.75)', 2, 10);
@@ -747,9 +790,8 @@ function gameLoop(timestamp) {
       steps++;
     }
 
-    // Camera follow (offset below lander so terrain stays visible)
-    camX += (lander.x - camX) * 0.08;
-    camY += ((lander.y + CAM_Y_LEAD) - camY) * 0.06;
+    camX = lander.x;
+    camY = lander.y;
 
     updateHUD();
 
