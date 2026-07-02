@@ -27,14 +27,14 @@ const ATT_THRUST = 180;        // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
-// Landing criteria (strict — upright body, perpendicular to ground, slow & stable)
-const MAX_LANDING_VN = 2.2;      // m/s into ground along surface normal
-const MAX_LANDING_VT = 0.6;      // m/s along surface (must be near-vertical)
-const MAX_LANDING_ANGLE = 8;     // degrees body tilt from upright (ignores terrain slope)
-const MAX_LANDING_OMEGA = 0.10;  // rad/s max spin at touchdown
-const CRASH_SPEED = 4.0;
-const CRASH_ANGLE = 40;
-const CRASH_OMEGA = 0.35;        // rad/s
+// Landing criteria
+const MAX_LANDING_VN = 3.0;      // m/s into ground along surface normal
+const MAX_LANDING_VT = 1.4;      // m/s along surface
+const MAX_LANDING_ANGLE = 14;    // degrees body tilt from upright
+const MAX_LANDING_OMEGA = 0.22;  // rad/s max spin at touchdown
+const CRASH_SPEED = 5.0;
+const CRASH_ANGLE = 50;
+const CRASH_OMEGA = 0.55;        // rad/s
 
 // World
 const WORLD_WIDTH_M = 4000;
