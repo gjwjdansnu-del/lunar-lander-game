@@ -1,6 +1,7 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 const G_MOON = 1.62;           // m/s² lunar gravity
-const PIXELS_PER_METER = 8;  // rendering scale
+const PIXELS_PER_METER = 3.5;  // rendering scale (lower = more zoomed out)
+const CAM_Y_LEAD = 40;         // camera looks this many meters below lander (shows ground)
 const DT = 1 / 120;            // fixed physics timestep (s)
 const MAX_SUBSTEPS = 4;
 
@@ -502,7 +503,7 @@ function initGame() {
 
   lander = new Lander(startX, startY, startVx, 0, startFuel);
   camX = lander.x;
-  camY = lander.y;
+  camY = lander.y + CAM_Y_LEAD;
   gameState = 'playing';
   overlay.classList.add('hidden');
 
@@ -584,7 +585,7 @@ function drawWorld() {
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(vsx, vsy);
-  ctx.lineTo(vsx + lander.vx * 4, vsy + lander.vy * 4);
+  ctx.lineTo(vsx + lander.vx * 10, vsy + lander.vy * 10);
   ctx.stroke();
 
   lander.draw(ctx, camX, camY);
@@ -607,9 +608,9 @@ function gameLoop(timestamp) {
       steps++;
     }
 
-    // Camera follow
+    // Camera follow (offset below lander so terrain stays visible)
     camX += (lander.x - camX) * 0.08;
-    camY += (lander.y - camY) * 0.06;
+    camY += ((lander.y + CAM_Y_LEAD) - camY) * 0.06;
 
     updateHUD();
 
