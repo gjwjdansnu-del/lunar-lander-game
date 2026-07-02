@@ -442,7 +442,7 @@ class Lander {
   getAttNozzleWorldPos(side) {
     const cos = Math.cos(this.theta);
     const sin = Math.sin(this.theta);
-    const lx = side * (LANDER_W / 2) * 0.9 * LANDER_VISUAL_SCALE;
+    const lx = side * (LANDER_W / 2) * LANDER_VISUAL_SCALE;
     const ly = -(LANDER_H / 2) * LANDER_VISUAL_SCALE;
     return {
       x: this.x + lx * cos - ly * sin,
@@ -452,24 +452,50 @@ class Lander {
 
   spawnAttParticle(px, py, fx, fy) {
     const mag = Math.sqrt(fx * fx + fy * fy) || 1;
-    const nx = -(fx / mag);
-    const ny = -(fy / mag);
-    for (let i = 0; i < 2; i++) {
-      const spread = (Math.random() - 0.5) * 0.35;
-      const speed = 6 + Math.random() * 8;
-      const cos = Math.cos(spread);
-      const sin = Math.sin(spread);
-      this.particles.push({
-        x: px + (Math.random() - 0.5) * 0.15,
-        y: py + (Math.random() - 0.5) * 0.15,
-        vx: (nx * cos - ny * sin) * speed + this.vx,
-        vy: (nx * sin + ny * cos) * speed + this.vy,
-        life: 0.18 + Math.random() * 0.12,
-        maxLife: 0.3,
-        size: 2.5 + Math.random() * 1.5,
-        color: `hsl(${25 + Math.random() * 25}, 100%, ${55 + Math.random() * 20}%)`,
-      });
-    }
+    const ex = -(fx / mag);
+    const ey = -(fy / mag);
+    this.particles.push({
+      x: px,
+      y: py,
+      vx: ex * (16 + Math.random() * 8) + this.vx,
+      vy: ey * (16 + Math.random() * 8) + this.vy,
+      life: 0.04 + Math.random() * 0.05,
+      maxLife: 0.09,
+      size: 1,
+      color: Math.random() > 0.45 ? '#eef6ff' : '#fff0b0',
+      rcs: true,
+    });
+  }
+
+  drawRcsFlame(ctx, nx, ny, dirX, dirY) {
+    const len = 0.5;
+    const halfW = 0.045;
+    const tipX = nx + dirX * len;
+    const tipY = ny + dirY * len;
+    const px = -dirY;
+    const py = dirX;
+
+    const grad = ctx.createLinearGradient(nx, ny, tipX, tipY);
+    grad.addColorStop(0, 'rgba(240, 248, 255, 0.95)');
+    grad.addColorStop(0.3, 'rgba(255, 235, 160, 0.8)');
+    grad.addColorStop(0.65, 'rgba(255, 180, 60, 0.45)');
+    grad.addColorStop(1, 'rgba(255, 120, 20, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(nx + px * halfW, ny + py * halfW);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(nx - px * halfW, ny - py * halfW);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(160, 210, 255, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(
+      nx + dirX * 0.06, ny + dirY * 0.06,
+      0.04, 0.025, Math.atan2(dirY, dirX), 0, Math.PI * 2
+    );
+    ctx.fill();
   }
 
   draw(ctx, camX, camY) {
@@ -521,14 +547,19 @@ class Lander {
     ctx.closePath();
     ctx.fill();
 
-    // Attitude thrusters (top corners, slightly larger than original)
+    // RCS thrusters at top corners
+    ctx.fillStyle = '#666';
+    ctx.beginPath();
+    ctx.arc(hw, -hh, 0.09, 0, Math.PI * 2);
+    ctx.arc(-hw, -hh, 0.09, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ← : right corner fires +x (CCW torque) | → : left corner fires -x
     if (this.attLeft) {
-      ctx.fillStyle = '#ff9900';
-      ctx.fillRect(hw - 0.15, -hh - 0.5, 0.5, 0.42);
+      this.drawRcsFlame(ctx, hw, -hh, 1, 0);
     }
     if (this.attRight) {
-      ctx.fillStyle = '#ff9900';
-      ctx.fillRect(-hw - 0.35, -hh - 0.5, 0.5, 0.42);
+      this.drawRcsFlame(ctx, -hw, -hh, -1, 0);
     }
 
     ctx.restore();
@@ -540,9 +571,14 @@ class Lander {
       const psy = toScreenY(p.y, camY);
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(psx, psy, p.size * alpha, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.rcs) {
+        const flicker = 1 + (1 - alpha) * 0.5;
+        ctx.fillRect(psx - flicker, psy - flicker * 0.5, flicker * 2, flicker);
+      } else {
+        ctx.beginPath();
+        ctx.arc(psx, psy, p.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
