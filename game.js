@@ -10,6 +10,8 @@ const MAX_SUBSTEPS = 4;
 const LANDER_W = 3.2;
 const LANDER_H = 2.4;
 const LEG_LEN = 1.6;
+const FOOT_PAD_DROP = 0.05;    // visual foot pad extends below leg tip
+const COLLISION_SCALE = LANDER_VISUAL_SCALE; // match rendered lander size
 const ENGINE_OFFSET_Y = LANDER_H / 2; // engine below center
 
 // Physics
@@ -316,29 +318,23 @@ class Lander {
     });
   }
 
-  checkTerrainCollision(terrain) {
+  getLegContactPoints() {
     const cos = Math.cos(this.theta);
     const sin = Math.sin(this.theta);
-    const hw = LANDER_W / 2;
+    const hw = (LANDER_W / 2) * COLLISION_SCALE;
+    const legTipY = (LANDER_H / 2 + LEG_LEN + FOOT_PAD_DROP) * COLLISION_SCALE;
     const legLocal = [
-      { x: -hw * 0.7, y: LANDER_H / 2 + LEG_LEN },
-      { x: hw * 0.7, y: LANDER_H / 2 + LEG_LEN },
+      { x: -hw * 0.7 * 1.1, y: legTipY },
+      { x: hw * 0.7 * 1.1, y: legTipY },
     ];
-    const legs = legLocal.map(l => ({
+    return legLocal.map(l => ({
       x: this.x + l.x * cos - l.y * sin,
       y: this.y + l.x * sin + l.y * cos,
     }));
+  }
 
-    // Also check hull bottom corners
-    const hullBottom = [
-      { x: -hw, y: LANDER_H / 2 },
-      { x: hw, y: LANDER_H / 2 },
-    ].map(l => ({
-      x: this.x + l.x * cos - l.y * sin,
-      y: this.y + l.x * sin + l.y * cos,
-    }));
-
-    const checkPts = [...legs, ...hullBottom];
+  checkTerrainCollision(terrain) {
+    const checkPts = this.getLegContactPoints();
     let minPen = 0;
     let contactX = 0;
     let contactY = 0;
