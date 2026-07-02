@@ -271,8 +271,8 @@ function spawnMeteor(initial = false) {
   meteors.push({
     x,
     y,
-    vx: (meteorRng() - 0.5) * 24,
-    vy: 14 + meteorRng() * 28,
+    vx: (meteorRng() - 0.5) * 12,
+    vy: 7 + meteorRng() * 14,
     r,
   });
 }
@@ -312,21 +312,43 @@ function drawMeteors(ctx, camX, camY) {
   for (const m of meteors) {
     const sx = toScreenX(m.x, camX);
     const sy = toScreenY(m.y, camY);
-    if (sx < -30 || sx > W + 30 || sy < -30 || sy > H + 30) continue;
+    if (sx < -100 || sx > W + 100 || sy < -100 || sy > H + 100) continue;
 
     const pr = Math.max(2.5, m.r * PIXELS_PER_METER * LANDER_VISUAL_SCALE * 0.55);
     const speed = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
-    if (speed > 2) {
-      const tx = sx - (m.vx / speed) * pr * 2.2;
-      const ty = sy - (m.vy / speed) * pr * 2.2;
-      const trail = ctx.createLinearGradient(sx, sy, tx, ty);
-      trail.addColorStop(0, 'rgba(255, 200, 120, 0.85)');
-      trail.addColorStop(1, 'rgba(255, 100, 40, 0)');
-      ctx.strokeStyle = trail;
-      ctx.lineWidth = Math.max(1, pr * 0.45);
+
+    if (speed > 0.4) {
+      const nx = m.vx / speed;
+      const ny = m.vy / speed;
+      const px = -ny;
+      const py = nx;
+      const tailLen = pr * (3.5 + speed * 0.45);
+      const ex = sx - nx * tailLen;
+      const ey = sy - ny * tailLen;
+      const headW = pr * 0.85;
+      const tailW = pr * 0.06;
+
+      const grad = ctx.createLinearGradient(sx, sy, ex, ey);
+      grad.addColorStop(0, 'rgba(255, 255, 245, 0.95)');
+      grad.addColorStop(0.12, 'rgba(255, 230, 150, 0.85)');
+      grad.addColorStop(0.4, 'rgba(255, 150, 60, 0.5)');
+      grad.addColorStop(0.75, 'rgba(255, 90, 30, 0.18)');
+      grad.addColorStop(1, 'rgba(255, 60, 10, 0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(sx + px * headW, sy + py * headW);
+      ctx.lineTo(sx - px * headW, sy - py * headW);
+      ctx.lineTo(ex - px * tailW, ey - py * tailW);
+      ctx.lineTo(ex + px * tailW, ey + py * tailW);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255, 245, 200, 0.55)';
+      ctx.lineWidth = Math.max(0.8, pr * 0.2);
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      ctx.lineTo(tx, ty);
+      ctx.lineTo(ex, ey);
       ctx.stroke();
     }
 
@@ -337,6 +359,11 @@ function drawMeteors(ctx, camX, camY) {
     ctx.arc(sx, sy, pr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    ctx.fillStyle = 'rgba(200, 190, 170, 0.45)';
+    ctx.beginPath();
+    ctx.arc(sx - pr * 0.2, sy - pr * 0.2, pr * 0.35, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
