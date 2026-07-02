@@ -54,7 +54,7 @@ const TERRAIN_SEGMENTS = 300;
 const START_FUEL_EASY = 20;
 const START_FUEL_REAL = 7;     // real mission: much less fuel (still shows 100% at start)
 const START_VX = 36;           // m/s rightward
-const START_THETA = -0.42;     // rad (~24°), nose left / engine tilted right-down
+const START_THETA = 0.42;      // rad (~24°), nose left / engine lower-right (retro vs +vx)
 const RCS_FLAME_SCALE = 5;
 
 const MODES = {
@@ -248,14 +248,33 @@ function terrainSlopeAt(terrain, x) {
   return Math.atan2(y2 - y1, dx);
 }
 
+function evaluateLandingStatus(lander, slope, lc) {
+  const nx = -Math.sin(slope);
+  const ny = -Math.cos(slope);
+  const tx = Math.cos(slope);
+  const ty = -Math.sin(slope);
+  const speed = Math.sqrt(lander.vx ** 2 + lander.vy ** 2);
+  const angleDeg = Math.abs(lander.theta * 180 / Math.PI);
+  const vNormal = Math.abs(lander.vx * nx + lander.vy * ny);
+  const vTangent = Math.abs(lander.vx * tx + lander.vy * ty);
+
+  if (vTangent <= lc.maxVt &&
+      vNormal <= lc.maxVn &&
+      angleDeg <= lc.maxAngle &&
+      Math.abs(lander.omega) <= lc.maxOmega) {
+    return 'safe';
+  }
+  return 'crash';
+}
+
 // ─── Lander rigid body ─────────────────────────────────────────────────────────
 class Lander {
-  constructor(x, y, vx, vy, fuel) {
+  constructor(x, y, vx, vy, fuel, theta = 0) {
     this.x = x;
     this.y = y;
     this.vx = vx;
     this.vy = vy;
-    this.theta = 0;       // radians, 0 = upright
+    this.theta = theta;   // radians, 0 = upright
     this.omega = 0;       // rad/s
     this.fuel = fuel;     // %
     this.alive = true;
@@ -265,6 +284,7 @@ class Lander {
     this.attLeft = false;
     this.attRight = false;
     this.particles = [];
+    this.landingIndicator = null; // 'safe' | 'crash' | null
   }
 
   get mass() {
@@ -379,6 +399,7 @@ class Lander {
 
     // Collision with terrain (leg tips)
     this.checkTerrainCollision(terrain);
+    this.updateLandingIndicator(terrain);
 
     // Update particles
     this.particles = this.particles.filter(p => {
@@ -472,17 +493,12 @@ class Lander {
 
       // Landing / crash detection
       if (!this.landed && !this.crashed) {
+        const lc = currentMode?.landing ?? LANDING_DEFAULT;
         const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
         const angleDeg = Math.abs(this.theta * 180 / Math.PI);
-        const vNormal = Math.abs(this.vx * nx + this.vy * ny);
-        const vTangent = Math.abs(this.vx * tx + this.vy * ty);
+        const status = evaluateLandingStatus(this, slope, lc);
 
-        const lc = currentMode?.landing ?? LANDING_DEFAULT;
-
-        if (vTangent <= lc.maxVt &&
-            vNormal <= lc.maxVn &&
-            angleDeg <= lc.maxAngle &&
-            Math.abs(this.omega) <= lc.maxOmega) {
+        if (status === 'safe') {
           this.landed = true;
           this.alive = false;
         } else if (speed > lc.crashSpeed || angleDeg > lc.crashAngle || Math.abs(this.omega) > lc.crashOmega) {
@@ -491,6 +507,19 @@ class Lander {
         }
       }
     }
+  }
+
+  updateLandingIndicator(terrain) {
+    if (!this.alive) return;
+    const lc = currentMode?.landing ?? LANDING_DEFAULT;
+    const groundY = terrainHeightAt(terrain, this.x);
+    const alt = groundY - this.y;
+    if (alt > 120) {
+      this.landingIndicator = null;
+      return;
+    }
+    const slope = terrainSlopeAt(terrain, this.x);
+    this.landingIndicator = evaluateLandingStatus(this, slope, lc);
   }
 
   spawnExhaust(pos, thrust) {
@@ -605,11 +634,20 @@ class Lander {
     ctx.fill();
     ctx.stroke();
 
-    // Window
-    ctx.fillStyle = '#4488cc';
+    // Window — green = safe landing range, red = crash range
+    const windowColor =
+      this.landingIndicator === 'safe' ? '#33dd55' :
+      this.landingIndicator === 'crash' ? '#ee3344' :
+      '#4488cc';
+    ctx.fillStyle = windowColor;
     ctx.beginPath();
     ctx.arc(0, -hh * 0.2, 0.45, 0, Math.PI * 2);
     ctx.fill();
+    if (this.landingIndicator) {
+      ctx.strokeStyle = this.landingIndicator === 'safe' ? '#1a9940' : '#aa1122';
+      ctx.lineWidth = 0.06;
+      ctx.stroke();
+    }
 
     // Engine bell
     ctx.fillStyle = '#666';
@@ -690,8 +728,7 @@ function initGame() {
   const startY = groundY - 120;
   const startFuel = currentMode.startFuel;
 
-  lander = new Lander(startX, startY, START_VX, 0, startFuel);
-  lander.theta = START_THETA;
+  lander = new Lander(startX, startY, START_VX, 0, startFuel, START_THETA);
 
   if (currentMode.randomOmega) {
     const rng = mulberry32(seed ^ 0xDEADBEEF);
