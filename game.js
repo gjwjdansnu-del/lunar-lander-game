@@ -27,10 +27,13 @@ const ATT_THRUST = 180;        // N per side thruster
 const ATT_FUEL_RATE = 0.12;    // %/s per active side thruster
 const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 
-// Landing criteria
-const MAX_LANDING_VY = 2.5;    // m/s downward
-const MAX_LANDING_VX = 1.5;    // m/s horizontal
-const MAX_LANDING_ANGLE = 12;  // degrees from upright
+// Landing criteria (lenient)
+const MAX_LANDING_VY = 3.5;    // m/s downward
+const MAX_LANDING_VX = 2.5;    // m/s horizontal
+const MAX_LANDING_ANGLE = 18;  // degrees from upright
+const MAX_LANDING_SLOPE = 30;  // degrees terrain slope
+const CRASH_SPEED = 5.5;
+const CRASH_ANGLE = 55;
 
 // World
 const WORLD_WIDTH_M = 4000;
@@ -54,46 +57,48 @@ window.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 // ─── Terrain generation (midpoint displacement) ─────────────────────────────
+let terrainCraters = [];
+
 function generateTerrain(seed) {
   const rng = mulberry32(seed);
   const segW = WORLD_WIDTH_M / TERRAIN_SEGMENTS;
 
   const craters = [];
-  const numCraters = 18 + Math.floor(rng() * 22);
+  const numCraters = 10 + Math.floor(rng() * 12);
   for (let c = 0; c < numCraters; c++) {
     craters.push({
       cx: rng() * WORLD_WIDTH_M,
-      cr: 20 + rng() * 110,
-      depth: 12 + rng() * 40,
-      rim: 3 + rng() * 8,
+      cr: 25 + rng() * 70,
+      depth: 5 + rng() * 14,
+      rim: 2 + rng() * 4,
     });
   }
+  terrainCraters = craters;
 
   const heights = new Float64Array(TERRAIN_SEGMENTS + 1);
   for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
-    heights[i] = 50 + rng() * 110;
+    heights[i] = 70 + rng() * 50;
   }
 
   function displace(lo, hi, amount) {
     if (hi - lo <= 1) return;
     const mid = (lo + hi) >> 1;
     heights[mid] = (heights[lo] + heights[hi]) / 2 + (rng() - 0.5) * amount;
-    const half = amount * 0.52;
+    const half = amount * 0.5;
     displace(lo, mid, half);
     displace(mid, hi, half);
   }
-  displace(0, TERRAIN_SEGMENTS, 220);
+  displace(0, TERRAIN_SEGMENTS, 90);
 
   const pts = [];
   for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
     const x = i * segW;
     let y = heights[i];
 
-    // layered ridges
-    y += Math.sin(x * 0.006) * 35;
-    y += Math.sin(x * 0.019 + 2.1) * 18;
-    y += Math.sin(x * 0.045 + 0.7) * 8;
-    y += (rng() - 0.5) * 10;
+    // gentle rolling hills
+    y += Math.sin(x * 0.005) * 12;
+    y += Math.sin(x * 0.014 + 1.8) * 6;
+    y += (rng() - 0.5) * 3;
 
     for (const crater of craters) {
       let dx = x - crater.cx;
@@ -102,15 +107,10 @@ function generateTerrain(seed) {
       if (dist < crater.cr) {
         const t = dist / crater.cr;
         y -= crater.depth * (1 - t * t);
-        if (dist > crater.cr * 0.75) {
-          y += crater.rim * (1 - Math.abs(t - 0.9) / 0.1);
+        if (dist > crater.cr * 0.8) {
+          y += crater.rim * (1 - Math.abs(t - 0.95) / 0.05);
         }
       }
-    }
-
-    // steep cliff segments
-    if (rng() < 0.04 && i > 5 && i < TERRAIN_SEGMENTS - 5) {
-      y += (rng() - 0.3) * 45;
     }
 
     pts.push({ x, y });
@@ -409,10 +409,10 @@ class Lander {
         if (Math.abs(this.vy) <= MAX_LANDING_VY &&
             Math.abs(this.vx) <= MAX_LANDING_VX &&
             angleDeg <= MAX_LANDING_ANGLE &&
-            slopeDeg <= 20) {
+            slopeDeg <= MAX_LANDING_SLOPE) {
           this.landed = true;
           this.alive = false;
-        } else if (speed > 4 || angleDeg > 45) {
+        } else if (speed > CRASH_SPEED || angleDeg > CRASH_ANGLE) {
           this.crashed = true;
           this.alive = false;
         }
@@ -646,7 +646,7 @@ function drawMinimap() {
   }
   ctx.lineTo(toMapX(terrain[terrain.length - 1].x), mapBottom);
   ctx.closePath();
-  ctx.fillStyle = '#3a3428';
+  ctx.fillStyle = '#6e6e78';
   ctx.fill();
 
   ctx.beginPath();
@@ -655,7 +655,7 @@ function drawMinimap() {
     if (i === 0) ctx.moveTo(toMapX(pt.x), toMapY(pt.y));
     else ctx.lineTo(toMapX(pt.x), toMapY(pt.y));
   }
-  ctx.strokeStyle = '#7a6e5a';
+  ctx.strokeStyle = '#a8a8b2';
   ctx.lineWidth = 1;
   ctx.stroke();
 
@@ -683,39 +683,78 @@ function drawMinimap() {
   ctx.stroke();
 }
 
+function drawCraterTexture(camX, camY, offset) {
+  const speckRng = mulberry32(seed ^ 0xB01D12);
+  for (const crater of terrainCraters) {
+    const wx = crater.cx + offset;
+    const sx = toScreenX(wx, camX);
+    const sy = toScreenY(terrainHeightAt(terrain, crater.cx), camY);
+    const r = crater.cr * PIXELS_PER_METER * 0.45;
+    if (sx < -r * 2 || sx > W + r * 2) continue;
+
+    ctx.fillStyle = 'rgba(30, 30, 38, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + r * 0.2, r, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(210, 210, 220, 0.14)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - r * 0.05, r * 1.08, r * 0.48, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 60; i++) {
+    const wx = speckRng() * WORLD_WIDTH_M + offset;
+    const sx = toScreenX(wx, camX);
+    const sy = toScreenY(terrainHeightAt(terrain, wx), camY);
+    if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
+    const shade = speckRng();
+    ctx.fillStyle = shade > 0.5 ? 'rgba(200,200,210,0.08)' : 'rgba(50,50,58,0.1)';
+    ctx.fillRect(sx, sy - speckRng() * 6, 1 + speckRng() * 2, 1 + speckRng());
+  }
+}
+
 function drawTerrainTiles(camX, camY) {
   const screenBottom = H + 100;
 
   for (let tile = -1; tile <= 1; tile++) {
     const offset = tile * WORLD_WIDTH_M;
 
+    const surfacePts = terrain.map(pt => ({
+      sx: toScreenX(pt.x + offset, camX),
+      sy: toScreenY(pt.y, camY),
+    }));
+
     ctx.beginPath();
-    let started = false;
-    for (const pt of terrain) {
-      const sx = toScreenX(pt.x + offset, camX);
-      const sy = toScreenY(pt.y, camY);
-      if (!started) { ctx.moveTo(sx, sy); started = true; }
-      else ctx.lineTo(sx, sy);
+    ctx.moveTo(surfacePts[0].sx, surfacePts[0].sy);
+    for (let i = 1; i < surfacePts.length; i++) {
+      ctx.lineTo(surfacePts[i].sx, surfacePts[i].sy);
     }
-    const firstSx = toScreenX(terrain[0].x + offset, camX);
-    const lastSx = toScreenX(terrain[terrain.length - 1].x + offset, camX);
+    const firstSx = surfacePts[0].sx;
+    const lastSx = surfacePts[surfacePts.length - 1].sx;
     ctx.lineTo(lastSx, screenBottom);
     ctx.lineTo(firstSx, screenBottom);
     ctx.closePath();
-    ctx.fillStyle = '#4a4035';
+
+    const avgSy = surfacePts.reduce((s, p) => s + p.sy, 0) / surfacePts.length;
+    const grad = ctx.createLinearGradient(0, avgSy - 60, 0, screenBottom);
+    grad.addColorStop(0, '#a8a8b2');
+    grad.addColorStop(0.12, '#8e8e98');
+    grad.addColorStop(0.5, '#6e6e78');
+    grad.addColorStop(1, '#45454d');
+    ctx.fillStyle = grad;
     ctx.fill();
 
-    // stroke surface only (avoids horizontal seam line at fill bottom)
+    drawCraterTexture(camX, camY, offset);
+
     ctx.beginPath();
-    started = false;
-    for (const pt of terrain) {
-      const sx = toScreenX(pt.x + offset, camX);
-      const sy = toScreenY(pt.y, camY);
-      if (!started) { ctx.moveTo(sx, sy); started = true; }
-      else ctx.lineTo(sx, sy);
+    ctx.moveTo(surfacePts[0].sx, surfacePts[0].sy);
+    for (let i = 1; i < surfacePts.length; i++) {
+      ctx.lineTo(surfacePts[i].sx, surfacePts[i].sy);
     }
-    ctx.strokeStyle = '#6a6055';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#c4c4ce';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
   }
 }
