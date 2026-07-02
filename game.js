@@ -63,6 +63,7 @@ const MODES = {
     label: '이지 모드',
     desc: '현재 설정 그대로. 화살표 키 + WASD 조작, 완만한 지형.',
     allowArrows: true,
+    showVelocityArrow: true,
     terrain: 'easy',
     startFuel: START_FUEL_EASY,
     randomOmega: false,
@@ -71,8 +72,9 @@ const MODES = {
   hard: {
     id: 'hard',
     label: '하드 모드',
-    desc: 'WASD만 사용. 가파르고 복잡한 지형.',
-    allowArrows: false,
+    desc: '화살표 키 + WASD 조작. 속도 화살표 없음, 가파른 지형.',
+    allowArrows: true,
+    showVelocityArrow: false,
     terrain: 'hard',
     startFuel: START_FUEL_EASY,
     randomOmega: false,
@@ -81,8 +83,9 @@ const MODES = {
   real: {
     id: 'real',
     label: 'Real Mission',
-    desc: '하드 모드 + 연료 대폭 감소 + 시작 시 랜덤 회전.',
-    allowArrows: false,
+    desc: '하드 모드 + 연료 대폭 감소 + 시작 시 랜덤 회전. 속도 화살표 없음.',
+    allowArrows: true,
+    showVelocityArrow: false,
     terrain: 'hard',
     startFuel: START_FUEL_REAL,
     randomOmega: true,
@@ -955,11 +958,13 @@ function drawWorld() {
   drawTerrainTiles(camX, camY);
 
   // Velocity vector with arrowhead (lander at screen center)
-  const vsx = W / 2;
-  const vsy = H / 2;
-  const vex = vsx + lander.vx * 10;
-  const vey = vsy + lander.vy * 10;
-  drawArrow(ctx, vsx, vsy, vex, vey, 'rgba(255,255,0,0.75)', 2, 10);
+  if (currentMode?.showVelocityArrow !== false) {
+    const vsx = W / 2;
+    const vsy = H / 2;
+    const vex = vsx + lander.vx * 10;
+    const vey = vsy + lander.vy * 10;
+    drawArrow(ctx, vsx, vsy, vex, vey, 'rgba(255,255,0,0.75)', 2, 10);
+  }
 
   lander.draw(ctx, camX, camY);
 
