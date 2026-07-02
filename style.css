@@ -214,6 +214,36 @@ body {
   min-height: 36px;
 }
 
+.mode-compare {
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+.mode-compare th,
+.mode-compare td {
+  border: 1px solid #333;
+  padding: 5px 10px;
+  text-align: center;
+}
+
+.mode-compare th {
+  background: #14141e;
+  color: #c8c8d8;
+  font-weight: normal;
+}
+
+.mode-compare th:first-child,
+.mode-compare td:first-child {
+  text-align: left;
+  color: #888;
+}
+
+.mode-compare tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
 #hud.hidden {
   display: none;
 }

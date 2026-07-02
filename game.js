@@ -31,10 +31,12 @@ const ATT_ARM = LANDER_W / 2;  // moment arm for attitude thrusters
 const LANDING_DEFAULT = {
   maxVn: 3.0,
   maxVt: 1.4,
-  maxAngle: 14,
+  maxAngle: 14,       // body tilt from upright (degrees)
+  maxSlope: 10,       // terrain slope at touchdown (degrees)
   maxOmega: 0.22,
   crashSpeed: 5.0,
   crashAngle: 50,
+  crashSlope: 28,
   crashOmega: 0.55,
 };
 
@@ -42,9 +44,11 @@ const LANDING_EASY = {
   maxVn: 5.5,
   maxVt: 3.0,
   maxAngle: 28,
+  maxSlope: 28,
   maxOmega: 0.5,
   crashSpeed: 7.5,
   crashAngle: 70,
+  crashSlope: 45,
   crashOmega: 0.9,
 };
 
@@ -258,12 +262,14 @@ function evaluateLandingStatus(lander, slope, lc) {
   const ty = -Math.sin(slope);
   const speed = Math.sqrt(lander.vx ** 2 + lander.vy ** 2);
   const angleDeg = Math.abs(lander.theta * 180 / Math.PI);
+  const slopeDeg = Math.abs(slope * 180 / Math.PI);
   const vNormal = Math.abs(lander.vx * nx + lander.vy * ny);
   const vTangent = Math.abs(lander.vx * tx + lander.vy * ty);
 
   if (vTangent <= lc.maxVt &&
       vNormal <= lc.maxVn &&
       angleDeg <= lc.maxAngle &&
+      slopeDeg <= lc.maxSlope &&
       Math.abs(lander.omega) <= lc.maxOmega) {
     return 'safe';
   }
@@ -499,12 +505,14 @@ class Lander {
         const lc = currentMode?.landing ?? LANDING_DEFAULT;
         const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
         const angleDeg = Math.abs(this.theta * 180 / Math.PI);
+        const slopeDeg = Math.abs(slope * 180 / Math.PI);
         const status = evaluateLandingStatus(this, slope, lc);
 
         if (status === 'safe') {
           this.landed = true;
           this.alive = false;
-        } else if (speed > lc.crashSpeed || angleDeg > lc.crashAngle || Math.abs(this.omega) > lc.crashOmega) {
+        } else if (speed > lc.crashSpeed || angleDeg > lc.crashAngle ||
+                   slopeDeg > lc.crashSlope || Math.abs(this.omega) > lc.crashOmega) {
           this.crashed = true;
           this.alive = false;
         }

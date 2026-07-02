@@ -13,7 +13,7 @@
   <div id="app">
     <header id="game-header">
       <h1>Lunar Lander</h1>
-      <span class="version">v0.5.6 · __BUILD__</span>
+      <span class="version">v0.5.7 · __BUILD__</span>
     </header>
     <div id="game-container">
     <canvas id="canvas"></canvas>
@@ -26,6 +26,27 @@
         <button class="mode-btn" data-mode="real">Real Mission</button>
       </div>
       <p class="mode-desc" id="mode-desc">현재 설정 그대로의 연습 모드입니다.</p>
+      <table class="mode-compare">
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th>이지</th>
+            <th>하드</th>
+            <th>Real</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>지형</td><td>완만</td><td>가파름</td><td>가파름</td></tr>
+          <tr><td>시작 연료</td><td>20%</td><td>20%</td><td>7%</td></tr>
+          <tr><td>속도 화살표</td><td>표시</td><td>숨김</td><td>숨김</td></tr>
+          <tr><td>시작 회전</td><td>없음</td><td>없음</td><td>랜덤</td></tr>
+          <tr><td>착륙 수직속도</td><td>≤5.5 m/s</td><td>≤3.0 m/s</td><td>≤3.0 m/s</td></tr>
+          <tr><td>착륙 수평속도</td><td>≤3.0 m/s</td><td>≤1.4 m/s</td><td>≤1.4 m/s</td></tr>
+          <tr><td>기체 기울기</td><td>≤28°</td><td>≤14°</td><td>≤14°</td></tr>
+          <tr><td>지면 기울기</td><td>≤28°</td><td>≤10°</td><td>≤10°</td></tr>
+          <tr><td>회전속도</td><td>≤0.5 rad/s</td><td>≤0.22 rad/s</td><td>≤0.22 rad/s</td></tr>
+        </tbody>
+      </table>
     </div>
     <div id="hud" class="hidden">
       <div class="hud-row">
