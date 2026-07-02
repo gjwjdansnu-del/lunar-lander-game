@@ -593,22 +593,7 @@ function initGame() {
   seed = Math.floor(Math.random() * 1e9);
   terrain = generateTerrain(seed);
 
-  // Find a reasonable landing zone (relatively flat area)
-  const segW = WORLD_WIDTH_M / TERRAIN_SEGMENTS;
-  let bestX = WORLD_WIDTH_M * 0.5;
-  let bestFlatness = Infinity;
-  for (let i = 10; i < TERRAIN_SEGMENTS - 10; i++) {
-    const x = i * segW;
-    const s1 = terrainSlopeAt(terrain, x - 20);
-    const s2 = terrainSlopeAt(terrain, x + 20);
-    const flatness = Math.abs(s1) + Math.abs(s2);
-    if (flatness < bestFlatness) {
-      bestFlatness = flatness;
-      bestX = x;
-    }
-  }
-
-  const startX = wrapX(bestX - 300);
+  const startX = wrapX(WORLD_WIDTH_M * (0.25 + Math.random() * 0.5));
   const groundY = terrainHeightAt(terrain, startX);
   const startY = groundY - 120; // start 120m above ground
   const startVx = 18; // m/s horizontal (fixed)
@@ -619,9 +604,6 @@ function initGame() {
   camY = lander.y;
   gameState = 'playing';
   overlay.classList.add('hidden');
-
-  // Draw landing zone marker
-  lander.targetX = bestX;
 }
 
 function updateHUD() {
@@ -711,19 +693,6 @@ function drawMinimap() {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // landing zone
-  if (lander.targetX) {
-    const tx = toMapX(lander.targetX);
-    const ty = toMapY(terrainHeightAt(terrain, lander.targetX));
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.7)';
-    ctx.setLineDash([2, 2]);
-    ctx.beginPath();
-    ctx.moveTo(tx - 8, ty);
-    ctx.lineTo(tx + 8, ty);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
   // viewport (centered on lander)
   const viewW = W / PIXELS_PER_METER;
   const viewH = H / PIXELS_PER_METER;
@@ -753,6 +722,8 @@ function drawTerrainTiles(camX, camY) {
 
   for (let tile = -1; tile <= 1; tile++) {
     const offset = tile * WORLD_WIDTH_M;
+
+    // fill (closed polygon, no stroke on bottom edge)
     ctx.beginPath();
     let started = false;
     for (const pt of terrain) {
@@ -769,6 +740,16 @@ function drawTerrainTiles(camX, camY) {
     ctx.closePath();
     ctx.fillStyle = '#4a4035';
     ctx.fill();
+
+    // stroke surface only (avoids horizontal seam line at fill bottom)
+    ctx.beginPath();
+    started = false;
+    for (const pt of terrain) {
+      const sx = toScreenX(pt.x + offset, camX);
+      const sy = toScreenY(pt.y, camY);
+      if (!started) { ctx.moveTo(sx, sy); started = true; }
+      else ctx.lineTo(sx, sy);
+    }
     ctx.strokeStyle = '#6a6055';
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -795,23 +776,6 @@ function drawWorld() {
   }
 
   drawTerrainTiles(camX, camY);
-
-  // Landing zone indicator
-  if (lander.targetX) {
-    const tx = toScreenX(lander.targetX, camX);
-    const ty = toScreenY(terrainHeightAt(terrain, lander.targetX), camY);
-    ctx.strokeStyle = 'rgba(0,255,0,0.4)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(tx - 40, ty);
-    ctx.lineTo(tx + 40, ty);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(0,255,0,0.6)';
-    ctx.font = '11px monospace';
-    ctx.fillText('착륙 지점', tx - 24, ty - 6);
-  }
 
   // Velocity vector with arrowhead (lander at screen center)
   const vsx = W / 2;
