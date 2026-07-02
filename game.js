@@ -41,8 +41,8 @@ const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
 const START_FUEL_EASY = 20;
 const START_FUEL_REAL = 7;     // real mission: much less fuel (still shows 100% at start)
-const START_VX = -36;
-const START_THETA = -0.42;
+const START_VX = 36;           // m/s rightward
+const START_THETA = -0.42;     // rad (~24°), nose left / engine tilted right-down
 const RCS_FLAME_SCALE = 5;
 
 const MODES = {
