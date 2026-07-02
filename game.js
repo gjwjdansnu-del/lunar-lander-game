@@ -40,6 +40,7 @@ const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
 const START_FUEL = 20;       // actual fuel tank (1/5 of original 100%)
 const FUEL_DISPLAY_SCALE = 100 / START_FUEL; // show 100% at full tank
+const RCS_FLAME_SCALE = 5;
 
 // Minimap
 const MINIMAP = { w: 220, h: 130, margin: 10 };
@@ -462,15 +463,16 @@ class Lander {
       vy: ey * (16 + Math.random() * 8) + this.vy,
       life: 0.04 + Math.random() * 0.05,
       maxLife: 0.09,
-      size: 1,
+      size: RCS_FLAME_SCALE,
       color: Math.random() > 0.45 ? '#eef6ff' : '#fff0b0',
       rcs: true,
     });
   }
 
   drawRcsFlame(ctx, nx, ny, dirX, dirY) {
-    const len = 0.5;
-    const halfW = 0.045;
+    const s = RCS_FLAME_SCALE;
+    const len = 0.5 * s;
+    const halfW = 0.045 * s;
     const tipX = nx + dirX * len;
     const tipY = ny + dirY * len;
     const px = -dirY;
@@ -493,8 +495,8 @@ class Lander {
     ctx.fillStyle = 'rgba(160, 210, 255, 0.85)';
     ctx.beginPath();
     ctx.ellipse(
-      nx + dirX * 0.06, ny + dirY * 0.06,
-      0.04, 0.025, Math.atan2(dirY, dirX), 0, Math.PI * 2
+      nx + dirX * 0.06 * s, ny + dirY * 0.06 * s,
+      0.04 * s, 0.025 * s, Math.atan2(dirY, dirX), 0, Math.PI * 2
     );
     ctx.fill();
   }
@@ -551,8 +553,8 @@ class Lander {
     // RCS thrusters at top corners
     ctx.fillStyle = '#666';
     ctx.beginPath();
-    ctx.arc(hw, -hh, 0.09, 0, Math.PI * 2);
-    ctx.arc(-hw, -hh, 0.09, 0, Math.PI * 2);
+    ctx.arc(hw, -hh, 0.09 * RCS_FLAME_SCALE, 0, Math.PI * 2);
+    ctx.arc(-hw, -hh, 0.09 * RCS_FLAME_SCALE, 0, Math.PI * 2);
     ctx.fill();
 
     // ← : right corner fires +x (CCW torque) | → : left corner fires -x
@@ -573,7 +575,7 @@ class Lander {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
       if (p.rcs) {
-        const flicker = 1 + (1 - alpha) * 0.5;
+        const flicker = p.size * (0.4 + (1 - alpha) * 0.2);
         ctx.fillRect(psx - flicker, psy - flicker * 0.5, flicker * 2, flicker);
       } else {
         ctx.beginPath();
