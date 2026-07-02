@@ -31,13 +31,17 @@ const MAX_LANDING_ANGLE = 12;  // degrees from upright
 
 // World
 const WORLD_WIDTH_M = 4000;
-const TERRAIN_SEGMENTS = 200;
+const TERRAIN_SEGMENTS = 300;
+const START_FUEL = 20;       // 1/5 of original 100%
+
+// Minimap
+const MINIMAP = { w: 220, h: 130, margin: 10 };
 
 // ─── Canvas setup ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const W = 960;
-const H = 540;
+const W = 1280;
+const H = 720;
 canvas.width = W;
 canvas.height = H;
 
@@ -49,42 +53,62 @@ window.addEventListener('keyup', e => { keys[e.code] = false; });
 // ─── Terrain generation (midpoint displacement) ─────────────────────────────
 function generateTerrain(seed) {
   const rng = mulberry32(seed);
-  const pts = [];
   const segW = WORLD_WIDTH_M / TERRAIN_SEGMENTS;
 
-  // base heights
-  const heights = new Float64Array(TERRAIN_SEGMENTS + 1);
-  for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
-    heights[i] = 80 + rng() * 60;
+  const craters = [];
+  const numCraters = 18 + Math.floor(rng() * 22);
+  for (let c = 0; c < numCraters; c++) {
+    craters.push({
+      cx: rng() * WORLD_WIDTH_M,
+      cr: 20 + rng() * 110,
+      depth: 12 + rng() * 40,
+      rim: 3 + rng() * 8,
+    });
   }
 
-  // midpoint displacement on coarse grid, then interpolate
+  const heights = new Float64Array(TERRAIN_SEGMENTS + 1);
+  for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
+    heights[i] = 50 + rng() * 110;
+  }
+
   function displace(lo, hi, amount) {
     if (hi - lo <= 1) return;
     const mid = (lo + hi) >> 1;
     heights[mid] = (heights[lo] + heights[hi]) / 2 + (rng() - 0.5) * amount;
-    const half = amount * 0.55;
+    const half = amount * 0.52;
     displace(lo, mid, half);
     displace(mid, hi, half);
   }
-  displace(0, TERRAIN_SEGMENTS, 120);
+  displace(0, TERRAIN_SEGMENTS, 220);
 
-  // smooth & add craters
+  const pts = [];
   for (let i = 0; i <= TERRAIN_SEGMENTS; i++) {
     const x = i * segW;
     let y = heights[i];
-    // craters
-    const numCraters = 3 + Math.floor(rng() * 4);
-    for (let c = 0; c < numCraters; c++) {
-      const cx = rng() * WORLD_WIDTH_M;
-      const cr = 30 + rng() * 80;
-      const depth = 8 + rng() * 20;
-      const dx = x - cx;
-      if (Math.abs(dx) < cr) {
-        const bowl = depth * (1 - (dx / cr) ** 2);
-        y -= bowl;
+
+    // layered ridges
+    y += Math.sin(x * 0.006) * 35;
+    y += Math.sin(x * 0.019 + 2.1) * 18;
+    y += Math.sin(x * 0.045 + 0.7) * 8;
+    y += (rng() - 0.5) * 10;
+
+    for (const crater of craters) {
+      const dx = x - crater.cx;
+      const dist = Math.abs(dx);
+      if (dist < crater.cr) {
+        const t = dist / crater.cr;
+        y -= crater.depth * (1 - t * t);
+        if (dist > crater.cr * 0.75) {
+          y += crater.rim * (1 - Math.abs(t - 0.9) / 0.1);
+        }
       }
     }
+
+    // steep cliff segments
+    if (rng() < 0.04 && i > 5 && i < TERRAIN_SEGMENTS - 5) {
+      y += (rng() - 0.3) * 45;
+    }
+
     pts.push({ x, y });
   }
   return pts;
@@ -367,11 +391,12 @@ class Lander {
     for (let i = 0; i < 3; i++) {
       const spread = (Math.random() - 0.5) * 0.4;
       const speed = 8 + Math.random() * 12;
+      // exhaust goes opposite to thrust (down from nozzle)
       this.particles.push({
         x: pos.x + (Math.random() - 0.5) * 0.3,
         y: pos.y + (Math.random() - 0.5) * 0.3,
-        vx: -Math.sin(this.theta + spread) * speed + this.vx,
-        vy: -Math.cos(this.theta + spread) * speed + this.vy,
+        vx: Math.sin(this.theta + spread) * speed + this.vx,
+        vy: Math.cos(this.theta + spread) * speed + this.vy,
         life: 0.3 + Math.random() * 0.3,
         maxLife: 0.6,
         size: 2 + intensity * 3,
@@ -385,8 +410,8 @@ class Lander {
     const mag = Math.sqrt(fx * fx + fy * fy) || 1;
     this.particles.push({
       x: px, y: py,
-      vx: (fx / mag) * speed + this.vx,
-      vy: (fy / mag) * speed + this.vy,
+      vx: -(fx / mag) * speed + this.vx,
+      vy: -(fy / mag) * speed + this.vy,
       life: 0.15 + Math.random() * 0.1,
       maxLife: 0.25,
       size: 1.5,
@@ -499,7 +524,7 @@ function initGame() {
   const groundY = terrainHeightAt(terrain, startX);
   const startY = groundY - 120; // start 120m above ground
   const startVx = 18; // m/s horizontal (fixed)
-  const startFuel = 100;
+  const startFuel = START_FUEL;
 
   lander = new Lander(startX, startY, startVx, 0, startFuel);
   camX = lander.x;
@@ -519,6 +544,120 @@ function updateHUD() {
   document.getElementById('vx').textContent = lander.vx.toFixed(2);
   document.getElementById('vy').textContent = lander.vy.toFixed(2);
   document.getElementById('angle').textContent = (lander.theta * 180 / Math.PI).toFixed(1);
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lineWidth = 1.5, headLen = 9) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 4) return;
+
+  const angle = Math.atan2(dy, dx);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 7), y2 - headLen * Math.sin(angle - Math.PI / 7));
+  ctx.lineTo(x2 - headLen * 0.6 * Math.cos(angle), y2 - headLen * 0.6 * Math.sin(angle));
+  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 7), y2 - headLen * Math.sin(angle + Math.PI / 7));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function getTerrainBounds() {
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const pt of terrain) {
+    if (pt.y < minY) minY = pt.y;
+    if (pt.y > maxY) maxY = pt.y;
+  }
+  return { minY: minY - 180, maxY: maxY + 60 };
+}
+
+function drawMinimap() {
+  const { w, h, margin } = MINIMAP;
+  const mx = W - w - margin;
+  const my = margin;
+  const bounds = getTerrainBounds();
+  const worldH = bounds.maxY - bounds.minY;
+  const scaleX = w / WORLD_WIDTH_M;
+  const scaleY = h / worldH;
+
+  const toMapX = x => mx + x * scaleX;
+  const toMapY = y => my + (y - bounds.minY) * scaleY;
+
+  ctx.fillStyle = 'rgba(0, 0, 16, 0.82)';
+  ctx.fillRect(mx, my, w, h);
+  ctx.strokeStyle = 'rgba(0, 255, 100, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mx, my, w, h);
+
+  ctx.font = '9px monospace';
+  ctx.fillStyle = 'rgba(0, 255, 100, 0.7)';
+  ctx.fillText('MAP', mx + 6, my + 12);
+
+  // terrain fill
+  ctx.beginPath();
+  ctx.moveTo(toMapX(terrain[0].x), toMapY(bounds.maxY));
+  for (const pt of terrain) {
+    ctx.lineTo(toMapX(pt.x), toMapY(pt.y));
+  }
+  ctx.lineTo(toMapX(terrain[terrain.length - 1].x), toMapY(bounds.maxY));
+  ctx.closePath();
+  ctx.fillStyle = '#3a3428';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i < terrain.length; i++) {
+    const pt = terrain[i];
+    if (i === 0) ctx.moveTo(toMapX(pt.x), toMapY(pt.y));
+    else ctx.lineTo(toMapX(pt.x), toMapY(pt.y));
+  }
+  ctx.strokeStyle = '#7a6e5a';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // landing zone
+  if (lander.targetX) {
+    const tx = toMapX(lander.targetX);
+    const ty = toMapY(terrainHeightAt(terrain, lander.targetX));
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.7)';
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(tx - 8, ty);
+    ctx.lineTo(tx + 8, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // viewport
+  const viewW = W / PIXELS_PER_METER;
+  const viewH = H / PIXELS_PER_METER;
+  const vx = camX - viewW / 2;
+  const vy = camY - viewH / 2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(toMapX(vx), toMapY(vy), viewW * scaleX, viewH * scaleY);
+
+  // lander
+  const lx = toMapX(lander.x);
+  const ly = toMapY(lander.y);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(lx + lander.vx * 1.2, ly + lander.vy * 1.2);
+  ctx.stroke();
 }
 
 function drawWorld() {
@@ -578,17 +717,16 @@ function drawWorld() {
     ctx.fillText('착륙 지점', tx - 24, ty - 6);
   }
 
-  // Velocity vector
+  // Velocity vector with arrowhead
   const vsx = (lander.x - camX) * PIXELS_PER_METER + W / 2;
   const vsy = (lander.y - camY) * PIXELS_PER_METER + H / 2;
-  ctx.strokeStyle = 'rgba(255,255,0,0.6)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(vsx, vsy);
-  ctx.lineTo(vsx + lander.vx * 10, vsy + lander.vy * 10);
-  ctx.stroke();
+  const vex = vsx + lander.vx * 10;
+  const vey = vsy + lander.vy * 10;
+  drawArrow(ctx, vsx, vsy, vex, vey, 'rgba(255,255,0,0.75)', 2, 10);
 
   lander.draw(ctx, camX, camY);
+
+  drawMinimap();
 }
 
 let lastTime = 0;

@@ -14,6 +14,35 @@ body {
   overflow: hidden;
 }
 
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#game-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 0 4px;
+}
+
+#game-header h1 {
+  color: #e8e8f0;
+  font-size: 22px;
+  font-weight: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#game-header .version {
+  color: #5a6a7a;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
 #game-container {
   position: relative;
 }
@@ -28,7 +57,7 @@ body {
   position: absolute;
   top: 8px;
   left: 8px;
-  right: 8px;
+  right: 240px;
   color: #0f0;
   font-size: 13px;
   text-shadow: 0 0 4px #0f0;
