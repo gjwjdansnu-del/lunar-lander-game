@@ -40,7 +40,8 @@ const CRASH_OMEGA = 0.55;        // rad/s
 const WORLD_WIDTH_M = 4000;
 const TERRAIN_SEGMENTS = 300;
 const START_FUEL = 20;       // actual fuel tank (1/5 of original 100%)
-const START_VX = 36;           // m/s horizontal at start (2× original 18)
+const START_VX = -36;          // m/s leftward (retro-friendly with nose-left pitch)
+const START_THETA = -0.42;     // rad (~24°), nose points left
 const FUEL_DISPLAY_SCALE = 100 / START_FUEL; // show 100% at full tank
 const RCS_FLAME_SCALE = 5;
 
@@ -607,6 +608,7 @@ function initGame() {
   const startFuel = START_FUEL;
 
   lander = new Lander(startX, startY, startVx, 0, startFuel);
+  lander.theta = START_THETA;
   camX = lander.x;
   camY = lander.y;
   gameState = 'playing';
