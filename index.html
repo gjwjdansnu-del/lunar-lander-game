@@ -13,7 +13,7 @@
   <div id="app">
     <header id="game-header">
       <h1>Lunar Lander</h1>
-      <span class="version">v0.5.4 · __BUILD__</span>
+      <span class="version">v0.5.5 · __BUILD__</span>
     </header>
     <div id="game-container">
     <canvas id="canvas"></canvas>
@@ -39,7 +39,10 @@
     </div>
     <div id="overlay" class="hidden">
       <div id="message"></div>
-      <button id="restart-btn">다시 시작</button>
+      <div class="overlay-actions">
+        <button id="restart-btn">다시 시작</button>
+        <button id="lobby-btn">로비로 나가기</button>
+      </div>
     </div>
     <div id="controls-hint">
       ↑/W: 추진 &nbsp;|&nbsp; ←→/A/D: 자세 제어

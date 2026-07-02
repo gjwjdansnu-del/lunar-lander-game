@@ -703,6 +703,7 @@ let fuelDisplayScale = 100 / START_FUEL_EASY;
 const overlay = document.getElementById('overlay');
 const messageEl = document.getElementById('message');
 const restartBtn = document.getElementById('restart-btn');
+const lobbyBtn = document.getElementById('lobby-btn');
 const modeSelect = document.getElementById('mode-select');
 const modeDescEl = document.getElementById('mode-desc');
 const hudEl = document.getElementById('hud');
@@ -1009,6 +1010,10 @@ function gameLoop(timestamp) {
 
 restartBtn.addEventListener('click', () => {
   if (currentMode) initGame();
+});
+
+lobbyBtn.addEventListener('click', () => {
+  showModeSelect();
 });
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
