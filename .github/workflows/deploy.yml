@@ -22,6 +22,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Inject build id for cache busting
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          sed -i "s/__BUILD__/${SHA}/g" index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
